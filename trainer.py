@@ -27,8 +27,18 @@ LR=5e-5
 BETA=0.999
 WEIGHT_DECAY=0.01
 
+#Model Hyperparameters
+NUM_WORDS_URG = 100 
+NUM_OBJS_URG = 10
+NUM_RELS_URG = 10
+N_PERS_ENTS = 10
+N_PERS_CSKG = 10
+N_PERS_RELS = 10
+NUM_CSKG = 50
+NUM_REL = 15
+
 config = RobertaConfig.from_pretrained('roberta-base', type_vocab_size=6) #possibly 7
-model = CoLAKE(config, )
+model = CoLAKE(config, NUM_WORDS_URG, NUM_OBJS_URG, NUM_RELS_URG, N_PERS_ENTS, N_PERS_CSKG, N_PERS_RELS, NUM_CSKG, NUM_REL)
 
 # fine-tune
 no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight', 'embedding']

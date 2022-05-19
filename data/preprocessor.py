@@ -13,6 +13,10 @@ def spanEquals(span1,span2):
     if span1['start'] == span2['start'] and span1['end'] == span2['end']:
         return True
     return False
+
+#TODO: map spans from utterances to relations span instead.
+#TODO: reidentify personal entities.
+#TODO: readjust span start and end indices.
 class Preprocessor:
     def __init__(self, triple_file, CSKG_file, personal_file):
         self.triple_file = triple_file
@@ -161,7 +165,23 @@ class Preprocessor:
                 f.write(json.dumps(conv)+'\n')
         print("Conversations Exported!!!")
 
-        
+def map_span_to_relations(file_path, output_file_path):
+    data = []
+    with open(file_path, "r") as f:
+        for line in f.readlines():
+            data.append(json.loads(line))
+    for conv in data:
+        for utt in conv['utterances']:
+            for rel in utt['relations']:
+                for span in utt['spans']:
+                    if rel['head_span']['start'] == span['start'] and rel['head_span']['end'] == span['end']:
+                        rel['head_span'] = span
+                    if rel['child_span']['start'] == span['start'] and rel['child_span']['end'] == span['end']:
+                        rel['child_span'] = span
+    with open(output_file_path, "w") as f:
+        for conv in data:
+            f.write(json.dumps(conv)+'\n')
+    
 
 if __name__ =="__main__":
     p = Preprocessor('final_updated_filtered_relation_annotated_triples.jsonl','final_annotated_conceptnet_entities.jsonl','final_annotated_personal_entities.jsonl')
@@ -170,6 +190,7 @@ if __name__ =="__main__":
     p.divide_convs_two_ways()
     p.add_personal_entities()
     p.export_convs('total_dataset.jsonl')
+    map_span_to_relations("total_dataset.jsonl",'total_dataset.jsonl')
 
 """
 format of triples:

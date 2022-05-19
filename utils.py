@@ -66,3 +66,131 @@ class MicroMetric(MetricBase):
         if r == 0.:
             return 0.
         return 2 * p * r / float(p + r)
+data= None
+import json, networkx as nx, numpy as np
+from transformers import RobertaTokenizer
+def create_input_data_file(input_file, max_utt_Len):
+    global data
+    tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
+    convs = []
+    with open(input_file,'r') as f:
+        for line in f.readlines():
+            convs.append(json.loads(line))
+            break
+    for conv in convs:
+        for utt in conv['utterances']:    
+            if not utt['relations'] == []:
+                data = create_input(tokenizer, utt,max_utt_Len)
+                break
+
+def create_input(tokenizer, utt, max_utt_len):
+    #-------------------------------------------------------------
+    ## Utterance Relation Graph
+    anchor_words=[]
+    rel_map={}
+    for x in utt['relations']:
+        anchor_words.append(utt['text'][x['head_span']['start']:x['head_span']['end']])
+        rel_map[utt['text'][x['head_span']['start']:x['head_span']['end']]] = x
+        #anchor_words.append(utt['text'][x['child_span']['start']:x['child_span']['end']])
+        #print(x)
+    #words = tokenizer.encode( utt['text'])
+    #words = words[:max_utt_len]
+    text = utt['text']
+    text = text.replace("."," ").replace("?"," ")..replace("!"," ").replace(","," ")
+    words = text.split(' ')
+    tokens,relations, tail_words = [0],[],[]
+    node2label = {0: 0}
+    idx = 1
+    pos = 0
+    soft_position = [0]
+    relation_position=[]
+    tail_position=[]
+    em = False
+    em_indices = []
+    #print("\n\n",rel_map.keys())
+    for word in words:
+        if len(word) <= 0:
+            continue
+        if word in anchor_words:
+            em=True
+            
+            relations.append((idx,rel_map[word]['label']))
+            relation_position.append(pos)
+            tail_words.append(utt['text'][rel_map[word]['child_span']['start']:rel_map[word]['child_span']['end']])
+            
+            #pos +=1
+        
+        word_enc = tokenizer.encode(word, add_special_tokens=False, add_prefix_space=True)
+        word_enc = word_enc[:max_utt_len]
+        for w in word_enc:
+            node2label[idx] = w
+            tokens.append(w)
+            soft_position.append(pos)
+            if em:
+                em_indices.append(idx)
+            idx +=1
+            pos += 1
+        
+        em=False
+        if len(relations) == 0:
+            continue
+    node2label[idx] =2
+    tokens.append(2)
+    soft_position.append(pos)
+    idx +=1
+    assert len(tokens) == idx
+    G = nx.complete_graph(idx)
+    n_word_nodes = idx
+        
+    for rel, pos_r in zip(relations,relation_position):
+        idx +=1
+        rel_idx,rel_ac = rel
+            #if rel_ac not in G.nodes:
+        G.add_node(idx)
+        node2label[idx] = rel_ac
+        soft_position.append(pos_r+1)
+        G.add_edge(rel_idx,idx)
+    n_relation_nodes = idx - n_word_nodes
+        
+    for tail, pos_t in zip(tail_words,relation_position):
+            #if tail not in G.nodes:
+        tail_enc = tokenizer.encode(tail)
+        posi = pos_t+2
+        prev = None
+        for i in tail_enc:
+            idx += 1
+            G.add_node(idx)
+            if prev is None:
+                prev = idx
+            else:
+                G.add_edge(prev,idx)
+                prev = idx
+            node2label[idx] = i
+            soft_position.append(posi)
+            posi += 1
+    n_tail_mentions = idx - n_relation_nodes-n_word_nodes
+        
+    #-------------------------------------------------------------
+    ##Personal Knowledge Graph Encoding
+    pkg = utt['pkg']
+    pkg_ent = []
+    pred_obj_map = {}
+    for (sub, pred, obj) in pkg:
+        idx +=1
+        node2label[idx] = sub
+        pred_obj_map[idx] = (pred,obj)
+    
+
+
+    #-------------------------------------------------------------
+    #0 = words, 1 = relations, 2 = entity mentions
+    token_types = [0] * n_word_nodes + [1] * n_relation_nodes +[2] * n_tail_mentions
+    for i in em_indices:
+        token_types[i+1] = 2
+    adj = np.array(nx.adjacency_matrix(G).todense())
+    adj = adj + np.eye(adj.shape[0], dtype=int)
+
+    return {'n_word_nodes': n_word_nodes, 'n_relation_nodes': n_relation_nodes,'n_object_nodes':n_tail_mentions, 'nodes': [node2label[k] for k in G.nodes],
+                                      'soft_position': soft_position, 'adj': adj.tolist(),
+                                      'token_type_ids': token_types}
+create_input_data_file("data/total_dataset.jsonl", 10000)

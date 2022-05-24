@@ -1,3 +1,4 @@
+from cgi import print_arguments
 import os
 import sys
 
@@ -7,12 +8,12 @@ import torch
 from torch import optim
 import torch.nn as nn
 from transformers import RobertaConfig, RobertaTokenizer
-
+from torch.utils.data import DataLoader
 import fitlog
 from fastNLP import cache_results
 from fastNLP import FitlogCallback, WarmupCallback, GradientClipCallback
 from fastNLP import RandomSampler, TorchLoaderIter, LossInForward, Trainer, Tester
-
+#from transformers import Trainer, TrainingArguments
 
 from utils import MicroMetric
 from model import CoLAKE
@@ -54,26 +55,28 @@ metrics = [MicroMetric(pred='pred', target='target')]
 
 
 
-test_data_iter = TorchLoaderIter(dataset=test_set, batch_size=BATCH_SIZE, sampler=RandomSampler(),
-                                     num_workers=4)
+#test_data_iter = TorchLoaderIter(dataset=test_set, batch_size=BATCH_SIZE, sampler=RandomSampler(),
+#                                     num_workers=4)
 devices = list(range(torch.cuda.device_count()))
-tester = Tester(data=test_data_iter, model=model, metrics=metrics, device=devices)
+#tester = Tester(data=test_data_iter, model=model, metrics=metrics, device=devices)
     # tester.test()
 
-fitlog_callback = FitlogCallback(tester=tester, log_loss_every=100, verbose=1)
+#fitlog_callback = FitlogCallback(tester=tester, log_loss_every=100, verbose=1)
 gradient_clip_callback = GradientClipCallback(clip_value=1, clip_type='norm')
 warmup_callback = WarmupCallback(warmup=WARM_UP, schedule='linear')
 
 bsz = BATCH_SIZE // GRAD_ACCUMULATION
-
+train_set = PKGDataSet('data/xaa')
+dev_set = PKGDataSet('data/xab')
 train_data_iter = TorchLoaderIter(dataset=train_set,
                                       batch_size=bsz,
-                                      sampler=RandomSampler(),
-                                      num_workers=4)
+                                      collate_fn=train_set.collate_fn)
 dev_data_iter = TorchLoaderIter(dataset=dev_set,
                                     batch_size=bsz,
-                                    sampler=RandomSampler(),
-                                    num_workers=4)
+                                    collate_fn=dev_set.collate_fn)
+#args = TrainingArguments('test',do_train=True)
+#trainer = Trainer(model=model,train_dataset=train_set,eval_dataset=train_set,args=args)
+
 trainer = Trainer(train_data=train_data_iter,
                       dev_data=dev_data_iter,
                       model=model,
@@ -83,9 +86,10 @@ trainer = Trainer(train_data=train_data_iter,
                       update_every=GRAD_ACCUMULATION,
                       n_epochs=EPOCHS,
                       metrics=metrics,
-                      callbacks=[fitlog_callback, gradient_clip_callback, warmup_callback],
+                      callbacks=[gradient_clip_callback, warmup_callback],
+                      #callbacks=[fitlog_callback, gradient_clip_callback, warmup_callback],
                       device=devices,
                       use_tqdm=True)
 
-trainer.train(load_best_model=False)
+trainer.train()
 

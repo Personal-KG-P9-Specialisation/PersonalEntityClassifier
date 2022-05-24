@@ -15,6 +15,7 @@ def coreference_resolution(text):
     nlp.close()
     return coref_chains
 
+# Just for testing.
 def get_classification(mention):
     if "c/en" in mention:
         return "string"
@@ -45,13 +46,14 @@ def entityLinker(user:User, utterance:str, mention:str, entityClassification:str
                 return idx
 
         elif mention.lower() in alternativePronouns:
-            # last entity mention in chain should be added to lookup
+            # TODO: Should consider entity mention's span start and end.
+            # TODO: Should have dialogue history for both agents of conversation.
             chains = coreference_resolution(user.dialogue + utterance)
             for chain in chains:
                 for element in chain:
                     if element[-1].lower() == mention.lower():
-                        # find last mention, currently first mention
-                        match = difflib.get_close_matches(chain[0][-1], user.lookup.keys(), n=1)
+                        entityMentions = [x for x in chain if x[-1].lower() not in alternativePronouns]
+                        match = difflib.get_close_matches(entityMentions[-1][-1], user.lookup.keys(), n=1)
                         if match[0].lower() in user.lookup.keys():
                             return user.lookup[match[0].lower()]
             # Next 3 lines might be removed - edge case: "existing" classification though not existing.
@@ -62,8 +64,12 @@ def entityLinker(user:User, utterance:str, mention:str, entityClassification:str
         else:
             match = difflib.get_close_matches(mention, user.lookup.keys(), n=1)
             if match:
-                if match[0].lower() in user.lookup.keys():
+                if match[0].lower() is not mention:
+                    user.lookup[mention.lower()] = user.lookup[match[0].lower()]
                     return user.lookup[match[0].lower()]
+                elif match[0].lower() in user.lookup.keys():
+                    return user.lookup[match[0].lower()]
+            # Next 3 lines might be removed - edge case: "existing" classification though not existing.
             idx = max(user.lookup.values()) + 1
             user.lookup[mention.lower()] = idx
             return idx
@@ -72,18 +78,10 @@ def entityLinker(user:User, utterance:str, mention:str, entityClassification:str
         return mention
 
 if __name__ == "__main__":
-    #PKG = [[1, "desires", "c/en/sports"], [1, "attends", 2]]
-    #dialogHistory = "I like Obama. He is a great man. He can fly."
-
     user = User()
-    #user.lookup["i"] = 1
-    #user.pkg.append([1, "desires", "c/en/sports"])
-    #user.lookup["she"] = 2
-    #user.pkg.append([1, "attends", 2])
 
     utterances = ["I like Obama. He is a great man. He can fly."]
-    triples = [{"subject":"I", "relation":"like", "object":"Obama"}, {"subject":"He", "relation":"IsA", "object":"c/en/man"}]
-    #mentions = ["he"]
+    triples = [{"subject":"I", "relation":"like", "object":"Obama"}, {"subject":"Ohama", "relation":"IsA", "object":"c/en/man"}]
 
     for utterance in utterances:
         for triple in triples:
@@ -91,14 +89,5 @@ if __name__ == "__main__":
             triple["subject"] = subjectId
             objectId = entityLinker(user, utterance, triple["object"], get_classification(triple["object"]))
             triple["object"] = objectId
-            print(triple)
             user.pkg.append(triple)
-            # replace triples with new entity?
-        print(user.lookup)
         user.dialogue = user.dialogue + utterance
-
-
-    #ch = coreference_resolution(dialogHistory)
-    #for chain in ch:
-        #print(chain[0][-1])
-    #node = entitylinker(classification, mention, PKG, dialogHistory)

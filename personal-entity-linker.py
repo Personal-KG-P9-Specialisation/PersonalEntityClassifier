@@ -1,5 +1,7 @@
 import difflib
 from stanfordcorenlp import StanfordCoreNLP
+import spacy
+import neuralcoref
 
 class User:
     def __init__(self):
@@ -7,13 +9,23 @@ class User:
         self.lookup = { "i":1 }
         self.dialogue = "" # "XXXXXXX"
 
-def coreference_resolution(text):
+def stanford_coref(text):
     # RUN THIS FIRST FROM NLP FOLDER: java -mx4g -cp "*" edu.stanford.nlp.pipeline.StanfordCoreNLPServer -port 9001 -timeout 15000 
     nlp = StanfordCoreNLP('http://localhost', port=9001)
     coref_chains = nlp.coref(text)
     print(coref_chains)
     nlp.close()
     return coref_chains
+
+def spacy_coref(text):
+    nlp = spacy.load('en')
+    neuralcoref.add_to_pipe(nlp)
+    doc1 = nlp('My sister has a dog. She loves him.')
+    print(doc1._.coref_clusters)
+
+    doc2 = nlp('Angela lives in Boston. She is quite happy in that city.')
+    for ent in doc2.ents:
+        print(ent._.coref_cluster)
 
 # Just for testing.
 def get_classification(mention):
@@ -48,7 +60,8 @@ def entityLinker(user:User, utterance:str, mention:str, entityClassification:str
         elif mention.lower() in alternativePronouns:
             # TODO: Should consider entity mention's span start and end.
             # TODO: Should have dialogue history for both agents of conversation.
-            chains = coreference_resolution(user.dialogue + utterance)
+            # TODO: Should use entity linker from SpaCy
+            chains = stanford_coref(user.dialogue + utterance)
             for chain in chains:
                 for element in chain:
                     if element[-1].lower() == mention.lower():
@@ -87,7 +100,11 @@ if __name__ == "__main__":
         for triple in triples:
             subjectId = entityLinker(user, utterance, triple["subject"], get_classification(triple["subject"]))
             triple["subject"] = subjectId
-            objectId = entityLinker(user, utterance, triple["object"], get_classification(triple["object"]))
-            triple["object"] = objectId
+
+            # We assume the hasValue and hasName relations always has a string literal as object. 
+            if triple["relation"] != ("hasValue" or "hasName"):
+                objectId = entityLinker(user, utterance, triple["object"], get_classification(triple["object"]))
+                triple["object"] = objectId
+
             user.pkg.append(triple)
         user.dialogue = user.dialogue + utterance

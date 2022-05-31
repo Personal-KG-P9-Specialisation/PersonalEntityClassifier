@@ -201,7 +201,7 @@ def create_input(tokenizer, utt, max_utt_len):
     
     text = utt['text']
     text = text.replace("."," ").replace("?"," ").replace("!"," ").replace(","," ")
-    words, word_indices = split_text(text) #text.split(' ')
+    words, word_indices = split_text(text)
     
     relation_position=[]
     em, em_indices, em_count = False,[],0
@@ -220,7 +220,6 @@ def create_input(tokenizer, utt, max_utt_len):
             tail_words.append((len(relations)-1,utt['text'][rel_map[word,word_index]['child_span']['start']:rel_map[word,word_index]['child_span']['end']]))
             temp_personal_ids.append(rel_map[word,word_index]['child_span']['personal_id'])
             
-            #pos +=1
         
         word_enc = tokenizer.encode(word, add_special_tokens=False, add_prefix_space=True)
         word_enc = word_enc[:max_utt_len]
@@ -243,7 +242,6 @@ def create_input(tokenizer, utt, max_utt_len):
     soft_position.append(pos)
     idx +=1
     assert len(tokens) == idx
-    #G = nx.complete_graph(idx)
     
     n_word_nodes = idx - (n_pkg_ents +n_pkg_rels)
     if 'pkg' in utt.keys():

@@ -16,6 +16,7 @@ class CoLAKE(RobertaForMaskedLM):
     def __init__(self, config, num_words_urg, num_objs_urg,num_rels_urg,n_pers_ents,n_pers_cskg,n_pers_rels, num_cskg, num_rel, ip_config='emb_ip.cfg', rel_emb=None, emb_name='entity_emb'):
         super().__init__(config)
         self.head = ClsHead(config, 2)
+        self.hidden_size1= config.hidden_size
         
         self.cskg_ent_embeddings = nn.Embedding(num_cskg, config.hidden_size, padding_idx=1)
         self.rel_embeddings = nn.Embedding(num_rel, config.hidden_size, padding_idx=1)
@@ -65,16 +66,32 @@ class CoLAKE(RobertaForMaskedLM):
         #n_pers_cskg=n_pers_cskg[0]
         n_word_nodes = n_word_nodes[0]
         #n_obj_nodes = n_obj_nodes[0]
-        
+        #print(input_ids.shape)
         #PKG
         pkg_entities = input_ids[:, : n_pkg_ents]
+        t_pkg_entities = torch.zeros([pkg_entities.shape[0], pkg_entities.shape[1],self.hidden_size1], dtype=torch.int32)
+        if not n_pkg_ents == 0:
+            for i in range(pkg_entities.shape[0]):
+                t_pkg_entities[i][0][pkg_entities[i]] = 1
+            pkg_entities = t_pkg_entities
         pkg_relations = input_ids[:,n_pkg_ents : n_pkg_ents+n_pkg_rels]
         
+        if not n_pkg_rels == 0:
+            t_pkg_rels = torch.zeros([pkg_relations.shape[0], pkg_relations.shape[1],self.hidden_size1], dtype=torch.int32)
+            for i in range(pkg_relations.shape[0]):
+                t_pkg_rels[i][0][pkg_relations[i]] = 1
+            pkg_relations = t_pkg_rels
+        
+
+        
         #URG
-        word_embeddings = input_ids[:, n_pkg_ents+n_pkg_rels: n_pkg_ents+n_pkg_rels+ n_word_nodes]  # batch x n_word_nodes x hidden_size
+        word_embeddings = self.roberta.embeddings.word_embeddings( input_ids[:, n_pkg_ents+n_pkg_rels: n_pkg_ents+n_pkg_rels+ n_word_nodes])  # batch x n_word_nodes x hidden_size
+        rel_embeddings =input_ids[:, n_pkg_ents+n_pkg_rels+ n_word_nodes:n_pkg_ents+n_pkg_rels+ n_word_nodes+n_relation_nodes]
+        #print(input_ids[:, n_pkg_ents+n_pkg_rels+ n_word_nodes-1:n_pkg_ents+n_pkg_rels+ n_word_nodes+n_relation_nodes+2])
         rel_embeddings = self.rel_embeddings(
-            input_ids[:, n_pkg_ents+n_pkg_rels+ n_word_nodes:n_pkg_ents+n_pkg_rels+ n_word_nodes+n_relation_nodes])
-        obj_embeddings = input_ids[:, n_word_nodes:n_word_nodes + n_tail_mentions]
+            rel_embeddings
+            )
+        obj_embeddings = self.roberta.embeddings.word_embeddings( input_ids[:, n_pkg_ents+n_pkg_rels+ n_word_nodes+n_relation_nodes:])
         
         #PKG
         #pers_embeddings = input_ids[:, n_word_nodes + n_obj_nodes+n_rel_nodes : n_word_nodes + n_obj_nodes+n_rel_nodes+n_pers_nodes]
@@ -82,7 +99,15 @@ class CoLAKE(RobertaForMaskedLM):
         #pers_rels_embedding = self.cskg_ent_embeddings( 
         #    input_ids[:, n_word_nodes + n_obj_nodes+n_rel_nodes+n_pers_nodes+ n_pers_cskg:])
 
-        inputs_embeds = torch.cat([pkg_entities,pkg_relations ,word_embeddings, rel_embeddings,obj_embeddings],
+        """rel_embeddings =  rel_embeddings[0]
+        word_embeddings = word_embeddings[0]
+        obj_embeddings = obj_embeddings[0]"""
+        
+        if pkg_relations.shape[1] == 0:
+            inputs_embeds = torch.cat([word_embeddings, rel_embeddings,obj_embeddings],
+                                  dim=1)  # batch x seq_len x hidden_size
+        else:
+            inputs_embeds = torch.cat([pkg_entities,pkg_relations ,word_embeddings, rel_embeddings,obj_embeddings],
                                   dim=1)  # batch x seq_len x hidden_size
 
         outputs = self.roberta(
@@ -94,13 +119,13 @@ class CoLAKE(RobertaForMaskedLM):
             inputs_embeds=inputs_embeds,
         )
         
-        #Maybe need adjustment after running code
-        sequence_output = outputs[0]  # batch x seq_len x hidden_size
+        sequence_output = outputs[0][:, 0, :]  # batch x seq_len x hidden_size
         predictions = self.head(sequence_output)
         
         loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='mean')
-        loss = loss_fct(predictions.view(-1, predictions.size(-1)), target.view(-1))
-        return {'loss': loss, 'pred': torch.argmax(predictions, dim=-1)}
+        act_target = torch.nonzero((target==1.0), as_tuple=True)[1]
+        loss = loss_fct(predictions.view(-1, predictions.size(-1)), act_target.view(-1))
+        return {'loss': loss, 'pred': predictions}
 
 class ClsHead(nn.Module):
     def __init__(self, config, num_labels, dropout=0.3):

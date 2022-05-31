@@ -76,8 +76,8 @@ dev_data_iter = TorchLoaderIter(dataset=dev_set,
                                     collate_fn=dev_set.collate_fn)
 #args = TrainingArguments('test',do_train=True)
 #trainer = Trainer(model=model,train_dataset=train_set,eval_dataset=train_set,args=args)
-
-trainer = Trainer(train_data=train_data_iter,
+if len(sys.argv) >=2 and str(sys.argv[1]) == 'gpu':
+    trainer =Trainer(train_data=train_data_iter,
                       dev_data=dev_data_iter,
                       model=model,
                       optimizer=optimizer,
@@ -89,6 +89,20 @@ trainer = Trainer(train_data=train_data_iter,
                       callbacks=[gradient_clip_callback, warmup_callback],
                       #callbacks=[fitlog_callback, gradient_clip_callback, warmup_callback],
                       device=devices,
+                      use_tqdm=True)
+else:
+    trainer = Trainer(train_data=train_data_iter,
+                      dev_data=dev_data_iter,
+                      model=model,
+                      optimizer=optimizer,
+                      loss=LossInForward(),
+                      batch_size=bsz,
+                      update_every=GRAD_ACCUMULATION,
+                      n_epochs=EPOCHS,
+                      metrics=metrics,
+                      callbacks=[gradient_clip_callback, warmup_callback],
+                      #callbacks=[fitlog_callback, gradient_clip_callback, warmup_callback],
+                      #device=devices,
                       use_tqdm=True)
 
 trainer.train()

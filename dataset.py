@@ -6,8 +6,6 @@ import torch
 
 class PKGDataSet(Dataset):
     def __init__(self, path):
-        """self.input_ids, self.n_word_nodes, self.n_entity_nodes, self.position_ids, self.attention_mask, self.masked_lm_labels, \
-        self.ent_masked_lm_labels, self.rel_masked_lm_labels, self.token_type_ids = [], [], [], [], [], [], [], [], []"""
         self.path = path
         self.data = []
         self.__read_file__()
@@ -42,6 +40,7 @@ class PKGDataSet(Dataset):
         types = self.__add_element_gt__(utt)
         for x in types:
             assert len(utt['input_pec']['token_type_ids']) == len(x)
+            
             self.data.append({
                 'input_ids': utt['input_pec']['nodes'],
                 'attention_mask':utt['input_pec']['adj'],
@@ -54,20 +53,10 @@ class PKGDataSet(Dataset):
                 'n_tail_mentions':utt['input_pec']['n_object_nodes'],
                 'target':[0,1], #need actual fix
             })
-            """self.input_ids.append(utt['input_pec']['nodes'])
-            self.n_pkg_ents.append(utt['input_pec']['n_pkg_ents'])
-            self.n_pkg_rels.append(utt['input_pec']['n_pkg_rels'])
-            self.n_word_nodes.append(utt['input_pec']['n_word_nodes'])
-            self.n_relation_nodes.append(utt['input_pec']['n_relation_nodes'])
-            self.n_object_nodes.append(utt['input_pec']['n_object_nodes'])
-            self.position_ids.append(utt['input_pec']['soft_position'])
-            self.attention_mask.append(utt['input_pec']['adj'])
-            assert len(utt['input_pec']['token_type_ids']) == len(x)
-            self.token_type_ids.append(x)"""
     
     def collate_fn(self, batch):
         
-        input_keys= ['input_ids','attention_mask','token_type_ids','position_ids','n_pkg_ents','n_pkg_rels','n_word_nodes','n_relation_nodes','n_tail_mentions']
+        input_keys= ['target','input_ids','attention_mask','token_type_ids','position_ids','n_pkg_ents','n_pkg_rels','n_word_nodes','n_relation_nodes','n_tail_mentions']
         target_keys = ['target']
         max_pkg_ents, max_pkg_rels, max_words,max_rels,max_tails = 0,0,0,0,0
         batch_pkg_ents, batch_pkg_rels, batch_words, batch_rels, batch_object = [],[],[],[],[]
@@ -92,12 +81,16 @@ class PKGDataSet(Dataset):
             rel_nodes = sample['input_ids'][n_pkg_ents+n_pkg_rels+n_word_nodes:n_pkg_ents+n_pkg_rels+n_word_nodes+n_relation_nodes]
             tail_nodes = sample['input_ids'][n_pkg_ents+n_pkg_rels+n_word_nodes+n_relation_nodes:]
             
-            
-            """pkg_ents = [f(x) for x in pkg_ents]
+            #Test code - NEEDS TO BE DELETED
+            def f(x):
+                if str(x).isnumeric():
+                    return int(x)
+                return 0
+            pkg_ents = [f(x) for x in pkg_ents]
             pkg_rels = [f(x) for x in pkg_rels]
             rel_nodes = [f(x) for x in rel_nodes]
             word_nodes = [f(x) for x in word_nodes]
-            tail_nodes = [f(x) for x in tail_nodes]"""
+            tail_nodes = [f(x) for x in tail_nodes]
             
             
             batch_pkg_ents.append(pkg_ents)
@@ -122,7 +115,15 @@ class PKGDataSet(Dataset):
             word_pad = max_words - len(batch_words[i])
             rels_pad = max_rels - len(batch_rels[i])
             tail_pad = max_tails - len(batch_object[i])
-            n_pkg_ents = batch_x['n_word_nodes'][i]
+            
+            batch_x['input_ids'][i] = batch_pkg_ents[i] + [1] * pkg_ent_pad + \
+                                      batch_pkg_rels[i] + [1] * pkg_rels_pad + \
+                                      batch_words[i] + [1] * word_pad + \
+                                      batch_rels[i] + [1] * rels_pad + \
+                                      batch_object[i] + [1] * tail_pad
+            
+            
+            n_pkg_ents = batch_x['n_pkg_ents'][i]
             n_pkg_rels = batch_x['n_pkg_rels'][i]
             n_word_nodes = batch_x['n_word_nodes'][i]
             n_relation_nodes = batch_x['n_relation_nodes'][i]
@@ -162,21 +163,21 @@ class PKGDataSet(Dataset):
                              adj[:,n_pkg_ents+n_pkg_rels+n_word_nodes+n_relation_nodes:],
                              torch.zeros(seq_len,tail_pad, dtype=torch.int)),dim=1)
             batch_x['attention_mask'][i] = adj
+            
+            batch_x['n_pkg_ents'][i] = max_pkg_ents
+            batch_x['n_pkg_rels'][i] = max_pkg_rels
+            batch_x['n_word_nodes'][i] = max_words
+            batch_x['n_relation_nodes'][i] = max_rels
+            batch_x['n_tail_mentions'][i] = max_tails
         
-        #Test code - NEEDS TO BE DELETED
-        def f(x):
-                if str(x).isnumeric():
-                    return int(x)
-                return 0
         
         for k,v in batch_x.items():
             if k == 'attention_mask':
                 batch_x[k] = torch.stack(v, dim=0)
-            elif k == 'input_ids':
-                z = [f(x) for x in v]
-                batch_x[k] = torch.tensor(z)
+            elif k == 'target':
+                batch_x[k] =torch.tensor(v, dtype=torch.float32)
             else:
                 batch_x[k] = torch.tensor(v)
         for k,v in batch_y.items():
-            batch_y[k] =torch.tensor(v)
+            batch_y[k] =torch.tensor(v, dtype=torch.float32)
         return (batch_x, batch_y)

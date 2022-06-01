@@ -24,3 +24,5 @@ RUN cp /PKGAnnotationSystem/annotations_data/final_annotated_conceptnet_entities
 RUN cp /PKGAnnotationSystem/annotations_data/final_annotated_personal_entities.jsonl /data/final_annotated_personal_entities.jsonl
 RUN rm -rf PKGAnnotationSystem
 #RUN cd code/data && python -m preprocessor
+
+RUN pip install spacy && pip install neuralcoref && pip install stanfordcorenlp

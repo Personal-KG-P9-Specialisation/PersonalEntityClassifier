@@ -184,13 +184,13 @@ def map_span_to_relations(file_path, output_file_path):
     
 
 if __name__ =="__main__":
-    p = Preprocessor('final_updated_filtered_relation_annotated_triples.jsonl','final_annotated_conceptnet_entities.jsonl','final_annotated_personal_entities.jsonl')
+    p = Preprocessor('/data/final_updated_filtered_relation_annotated_triples.jsonl','/data/final_annotated_conceptnet_entities.jsonl','/data/final_annotated_personal_entities.jsonl')
     p.filter_spans()
     p.add_conceptnet()
     p.divide_convs_two_ways()
     p.add_personal_entities()
-    p.export_convs('total_dataset.jsonl')
-    map_span_to_relations("total_dataset.jsonl",'total_dataset.jsonl')
+    p.export_convs('total_dataset2.jsonl')
+    map_span_to_relations("total_dataset2.jsonl",'total_dataset2.jsonl')
 
 """
 format of triples:

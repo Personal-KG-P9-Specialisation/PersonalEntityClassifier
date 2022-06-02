@@ -4,7 +4,7 @@ from fastNLP.core.utils import _get_func_signature
 from sklearn.metrics import f1_score, precision_recall_fscore_support
 import itertools
 import matplotlib.pyplot as plt
-import queue
+import pickle
 
 class MicroMetric(MetricBase):
     def __init__(self, pred=None, target=None, no_relation_idx=0):
@@ -312,5 +312,93 @@ def create_input(tokenizer, utt, max_utt_len):
     return {'n_pkg_ents':n_pkg_ents,'n_pkg_rels':n_pkg_rels, 'n_word_nodes': n_word_nodes, 'n_relation_nodes': n_relation_nodes,'n_object_nodes':n_tail_mentions, 'nodes': nodes,
                                       'soft_position': soft_position, 'adj': adj.tolist(),
                                       'token_type_ids': token_types, 'entity_mention_idx':(em_indices,personal_ids)}
+
+
+
+def personal_id_fixer(input, output):
+    convs = []
+    with open(input,'r') as f:
+        for line in f.readlines():
+            convs.append(json.loads(line))
+    f = open(output,'w')
+    for conv in convs:
+        pers_dict = {'counter':0}
+        for utt in conv['utterances']:
+            if len(utt['relations']) == 0:
+                continue
+            for rel in utt['relations']:
+                head = rel['head_span']
+                child = rel['child_span']
+                for em in [head, child]:
+                    if 'personal_id' in em.keys() and em['personal_id'] in pers_dict.keys():
+                        em['personal_id'] = pers_dict[ em['personal_id'] ]
+                    elif 'personal_id' in em.keys() and (not em['personal_id'] in pers_dict.keys()):
+                        pers_dict[em['personal_id']] = pers_dict['counter']
+                        pers_dict['counter'] = pers_dict['counter'] + 1
+                        em['personal_id'] = pers_dict[em['personal_id']]
+        f.write(json.dumps(conv)+'\n')
+    f.close()
+import copy
+
+def pkg_constructor(input, output):
+    convs = []
+    with open(input,'r') as f:
+        for line in f.readlines():
+            convs.append(json.loads(line))
+    f = open(output,'w')
+    for conv in convs:
+        conv['utterances'] = sorted(conv['utterances'], key =lambda x: x['turn']) 
+        pkg = set()
+        for utt in conv['utterances']:
+            if len(utt['relations']) == 0:
+                utt['pkg'] = copy.deepcopy(list(pkg))
+                continue
+            utt['pkg'] = copy.deepcopy(list(pkg))
+            for rel in utt['relations']:
+                pkg.add((rel['head_span']['personal_id'], rel['label'],rel['child_span']['personal_id']))
+                for i in [rel['head_span'], rel['child_span']]:
+                    if 'conceptnet' in i.keys():
+                        pkg.add((i['personal_id'], 'instanceOf', i['conceptnet']))
+        f.write(json.dumps(conv)+'\n')
+    f.close()
+
+def CSKG_REL_mapper(input, output, cskg_mapper, rel_mapper):
+    CSKGMapper = {'IDcounter' :0, 'version':'CSKG_Mapper'}
+    RELMapper = {'IDcounter' :0, 'version':'REL_Mapper'}
+    f_o = open(output,'w')
+    convs = []
+    with open(input, 'r') as f:
+        for line in f.readlines():
+            conv = json.loads(line)
+            for utt in conv['utterances']:
+                if len(utt['relations']) == 0:
+                    continue
+                for rel in utt['relations']:
+                    if rel['label'] in RELMapper.keys():
+                        rel['label'] = RELMapper[rel['label']]
+                    else:
+                        RELMapper[rel['label']] = RELMapper['IDcounter']
+                        rel['label'] = RELMapper[rel['label']]
+                        RELMapper['IDcounter'] = RELMapper['IDcounter'] + 1
+                    for i in [rel['head_span'],rel['child_span']]:
+                        if 'conceptnet' in i.keys() and i['conceptnet'] in CSKGMapper.keys():
+                            i['conceptnet'] = CSKGMapper[i['conceptnet']]
+                        elif 'conceptnet' in i.keys() and not (i['conceptnet'] in CSKGMapper.keys()):
+                            CSKGMapper[i['conceptnet']] = CSKGMapper['IDcounter']
+                            CSKGMapper['IDcounter'] = CSKGMapper['IDcounter'] + 1
+                            i['conceptnet'] = CSKGMapper[i['conceptnet']]
+            convs.append(conv)
+            f_o.write(json.dumps(conv)+'\n')
+    """with open(output,'w') as f_o:
+        for conv in convs:
+            f_o.write('')"""
+    f_o.close()
+    for i,y in zip([cskg_mapper,rel_mapper],[CSKGMapper,RELMapper]):
+        with open(i,'wb') as handle:
+            pickle.dump(y, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
 if __name__ == '__main__':
-    create_input_data_file("data/total_dataset.jsonl", 10000, "data/pec_convs.jsonl")
+    personal_id_fixer("data/total_dataset2.jsonl","data/total_dataset3.jsonl")
+    CSKG_REL_mapper("data/total_dataset3.jsonl","data/total_dataset4.jsonl", "data/cskg_dict.pickle","data/rel_dict.pickle")
+    pkg_constructor("data/total_dataset3.jsonl", "data/total_dataset3.jsonl")
+    create_input_data_file("data/total_dataset3.jsonl", 10000, "data/pec_convs.jsonl")

@@ -32,7 +32,7 @@ def entityLinker(pkg, lookup, dialogue, utterance, mention, classification):
 
     elif classification == "existing":
         personalPronouns = ["my", "i"]
-        alternativePronouns = ["he", "she", "you", "it", "we", "they", "their", "his", "her", "him", "your"]
+        alternativePronouns = ["he", "she", "you", "it", "its", "we", "they", "them", "their", "theirs", "his", "hers", "her", "him", "your"]
 
         if mention.lower() in personalPronouns:
             if mention.lower() in lookup.keys():
@@ -80,7 +80,7 @@ def entityLinker(pkg, lookup, dialogue, utterance, mention, classification):
     elif classification == "string":
         return mention
 
-def test-example():
+def testexample():
     pkg = [] # [[1, "desires", "c/en/sports"], [1, "attends", 2]]
     lookup = { "i":1 }
     dialogue = "" # "XXXXXXX"
@@ -102,4 +102,5 @@ def test-example():
     print(pkg)
 
 if __name__ == "__main__":
-    test-example()
+    testexample()
+    #spacy_coref("Hi I like Obama. He is a great man")

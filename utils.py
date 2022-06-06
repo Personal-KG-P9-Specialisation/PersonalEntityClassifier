@@ -4,7 +4,7 @@ from fastNLP.core.utils import _get_func_signature
 from sklearn.metrics import f1_score, precision_recall_fscore_support
 import itertools
 import matplotlib.pyplot as plt
-import pickle
+import pickle, os
 
 class MicroMetric(MetricBase):
     def __init__(self, pred=None, target=None, no_relation_idx=0):
@@ -70,11 +70,10 @@ class MicroMetric(MetricBase):
             return 0.
         return 2 * p * r / float(p + r)
 
-data= None
 import json, networkx as nx, numpy as np
 from transformers import RobertaTokenizer
+
 def create_input_data_file(input_file, max_utt_Len, output_file):
-    #global data
     tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
     convs = []
     with open(input_file,'r') as f:
@@ -123,17 +122,25 @@ def create_input(tokenizer, utt, max_utt_len):
             sofar+= 1
             sofar+= len(x)
         return splits,indices
+    def split_pkg_ents(pkg_ents):
+        cskg,pers = {},[]
+        for x in pkg_ents:
+            if x.startswith('c_'):
+                cskg[x]= int(x[2:])
+            else:
+                pers.append(int(x))
+        return pers,cskg
     
     tokens = [0]
     node2label = {0: 0}
     idx = 1
     pos = 0
     soft_position = [0]
-    n_pkg_ents,n_pkg_rels = 0,0
+    n_pkg_ents,n_pkg_rels, n_pkg_cskg = 0,0,0
     #-------------------------------------------------------------
     ##Personal Knowledge Graph Encoding
-    CSKG_type = []
-    if 'pkg' in utt.keys():
+    #CSKG_type = []
+    if 'pkg' in utt.keys() and (not utt['pkg'] == []):
         pkg = utt['pkg']
         pkg = [tuple(x) for x in pkg]
         pkg_ent = set()
@@ -146,23 +153,34 @@ def create_input(tokenizer, utt, max_utt_len):
             pkg_ent.add(obj)
             #preds[(sub,obj,pred)] = pred
         
-        pkg_ents = [str(x) for x in pkg_ent]
-        pkg_ents = sorted(list(pkg_ents))
-        for x in pkg_ents:
-            if is_int(x):
-                x = int(x)
+        pkg_ents = list(set([str(x) for x in pkg_ent]))
+        pkg_ents, pkg_cskg = split_pkg_ents(pkg_ents)
+        #pkg_ents = sorted(list(pkg_ents))
+        #for x in pkg_ents:
+        #    if is_int(x):
+        #        x = int(x)
         for ent in pkg_ents:
             
             node2label[idx] = ent
             tokens.append(ent)
             soft_position.append(pos)
 
-            if not is_int(ent):
-                CSKG_type.append(idx)
+            #if not is_int(ent):
+            #    CSKG_type.append(idx)
             pkg_ent2idx[ent] = idx
             idx +=1
             pos += 1
-        n_pkg_ents = idx
+        n_pkg_ents = idx-1
+        
+        for key, ent in pkg_cskg.items():
+            node2label[idx] = ent
+            tokens.append(ent)
+            pkg_ent2idx[key] = idx
+            soft_position.append(pos)
+            idx += 1
+            pos +=1
+        n_pkg_cskg = idx - n_pkg_ents-1
+        
         G = nx.Graph()
         G.add_nodes_from([x for x in range(idx)])
         for (sub,pred,obj) in pkg:
@@ -170,14 +188,23 @@ def create_input(tokenizer, utt, max_utt_len):
             tokens.append(pred)
             soft_position.append(pos)
             G.add_node(idx)
-            G.add_edge(pkg_ent2idx[str(sub)],idx)
-            G.add_edge(pkg_ent2idx[str(obj)],idx)
+            if str(sub) in pkg_ent2idx.keys():
+                G.add_edge(pkg_ent2idx[str(sub)],idx)
+            else:
+                G.add_edge(pkg_ent2idx[sub],idx)
+            #G.add_edge(pkg_ent2idx[str(obj)],idx)
 
             idx += 1
             pos += 1
-        n_pkg_rels = idx - n_pkg_ents
+        n_pkg_rels = idx - (n_pkg_ents+n_pkg_cskg+1)
+    #else:
+    #    pos += 1
         
-
+    node2label[idx] =2
+    tokens.append(2)
+    soft_position.append(pos)
+    pos += 1
+    idx +=1
     #-------------------------------------------------------------
     ## Utterance Relation Graph
     anchor_words,anchor_indices, relations, tail_words,rel_map = [],[], [],[],{}
@@ -237,14 +264,12 @@ def create_input(tokenizer, utt, max_utt_len):
         if len(relations) == 0:
             continue
     assert len(personal_ids) == len(em_indices)
-    node2label[idx] =2
-    tokens.append(2)
-    soft_position.append(pos)
-    idx +=1
+    
     assert len(tokens) == idx
     
-    n_word_nodes = idx - (n_pkg_ents +n_pkg_rels)
-    if 'pkg' in utt.keys():
+    n_word_nodes = idx - (n_pkg_ents +n_pkg_rels+n_pkg_cskg+2)
+    if 'pkg' in utt.keys() and (not utt['pkg'] == []):
+        G.add_node(idx-n_word_nodes-1)
         G = create_complete_sub_G(G , [x for x in range(idx-n_word_nodes, idx)])
     else:
         G = nx.complete_graph(idx)
@@ -261,7 +286,7 @@ def create_input(tokenizer, utt, max_utt_len):
         for x in range(span):
             G.add_edge(rel_idx+x, idx)
         rel2idx.append(idx)
-    n_relation_nodes = idx - (n_word_nodes+n_pkg_ents +n_pkg_rels)
+    n_relation_nodes = idx - (n_word_nodes+n_pkg_ents +n_pkg_rels+n_pkg_cskg+2)
 
     all_tail_indices = []
     for (rel_idx,tail), pos_t in zip(tail_words,relation_position):
@@ -287,26 +312,28 @@ def create_input(tokenizer, utt, max_utt_len):
         personal_ids.extend([temp_personal_ids[em_count]]*len(tail_indices))
         all_tail_indices.extend(tail_indices)
         em_count += 1
-    n_tail_mentions = idx - (n_relation_nodes+n_word_nodes+n_pkg_ents +n_pkg_rels)
+    n_tail_mentions = idx - (n_relation_nodes+n_word_nodes+n_pkg_ents +n_pkg_rels+n_pkg_cskg+2)
     #nx.draw(G, pos=nx.spring_layout(G))
     #plt.savefig('test.png')
 
     #-------------------------------------------------------------
     #0 = words, 1 = relations, 2 = entity mentions, 3 = pkg_ents, 4 = CSKG ent
-    if 'pkg' in utt.keys():
+    token_types = [0]+[3]*n_pkg_ents+[4]*n_pkg_cskg+[1]*n_pkg_rels+[0]+[0]*n_word_nodes +[1]*n_relation_nodes + [2]*n_tail_mentions
+    """if 'pkg' in utt.keys():
         token_types = [0]+[3]*(n_pkg_ents-1)+[1]*n_pkg_rels +  [0] * n_word_nodes + [1] * n_relation_nodes +[2] * n_tail_mentions
     else:
         token_types = [3]*(n_pkg_ents-1)+[1]*n_pkg_rels +  [0] * n_word_nodes + [1] * n_relation_nodes +[2] * n_tail_mentions
+    """
     for i in em_indices:
         token_types[i] = 2
-    for i in CSKG_type:
-        token_types[i] = 4
+    #for i in CSKG_type:
+    #    token_types[i] = 4
     adj = np.array(nx.adjacency_matrix(G).todense())
     adj = adj + np.eye(adj.shape[0], dtype=int)
     nodes = [node2label[k] for k in G.nodes]
-    assert len(nodes) == n_word_nodes + n_relation_nodes + n_tail_mentions + n_pkg_ents + n_pkg_rels
-    assert len(soft_position) == n_word_nodes+n_relation_nodes+n_tail_mentions+ n_pkg_ents + n_pkg_rels
-    assert len(token_types) == n_word_nodes+n_relation_nodes+n_tail_mentions+ n_pkg_ents + n_pkg_rels
+    assert len(nodes) == n_word_nodes + n_relation_nodes + n_tail_mentions + n_pkg_ents + n_pkg_rels+n_pkg_cskg+2
+    assert len(soft_position) == n_word_nodes+n_relation_nodes+n_tail_mentions+ n_pkg_ents + n_pkg_rels+n_pkg_cskg+2
+    assert len(token_types) == n_word_nodes+n_relation_nodes+n_tail_mentions+ n_pkg_ents + n_pkg_rels+n_pkg_cskg+2
     em_indices.extend(all_tail_indices)
     assert len(personal_ids) == len(em_indices)
     return {'n_pkg_ents':n_pkg_ents,'n_pkg_rels':n_pkg_rels, 'n_word_nodes': n_word_nodes, 'n_relation_nodes': n_relation_nodes,'n_object_nodes':n_tail_mentions, 'nodes': nodes,
@@ -338,14 +365,16 @@ def personal_id_fixer(input, output):
                         em['personal_id'] = pers_dict[em['personal_id']]
         f.write(json.dumps(conv)+'\n')
     f.close()
+    print('Personal Id Fixed')
 import copy
 
-def pkg_constructor(input, output):
+def pkg_constructor(input, output, rel_mapper):
     convs = []
     with open(input,'r') as f:
         for line in f.readlines():
             convs.append(json.loads(line))
     f = open(output,'w')
+    relMapper = pickle.load(open(rel_mapper,'rb'))
     for conv in convs:
         conv['utterances'] = sorted(conv['utterances'], key =lambda x: x['turn']) 
         pkg = set()
@@ -358,13 +387,21 @@ def pkg_constructor(input, output):
                 pkg.add((rel['head_span']['personal_id'], rel['label'],rel['child_span']['personal_id']))
                 for i in [rel['head_span'], rel['child_span']]:
                     if 'conceptnet' in i.keys():
-                        pkg.add((i['personal_id'], 'instanceOf', i['conceptnet']))
+                        if 'instanceOf' in relMapper.keys():
+                            pkg.add((i['personal_id'], relMapper['instanceOf'], i['conceptnet']))
+                        else:
+                            relMapper['instanceOf'] = relMapper['IDcounter']
+                            pkg.add((i['personal_id'], relMapper['instanceOf'], i['conceptnet']))
+                            relMapper['IDcounter'] = relMapper['IDcounter'] + 1
         f.write(json.dumps(conv)+'\n')
     f.close()
+    pickle.dump(relMapper,open(rel_mapper,'wb'), protocol=pickle.HIGHEST_PROTOCOL)
 
 def CSKG_REL_mapper(input, output, cskg_mapper, rel_mapper):
     CSKGMapper = {'IDcounter' :0, 'version':'CSKG_Mapper'}
     RELMapper = {'IDcounter' :0, 'version':'REL_Mapper'}
+    if input == output:
+        raise Exception('Input file and Output file must be different paths')
     f_o = open(output,'w')
     convs = []
     with open(input, 'r') as f:
@@ -382,11 +419,11 @@ def CSKG_REL_mapper(input, output, cskg_mapper, rel_mapper):
                         RELMapper['IDcounter'] = RELMapper['IDcounter'] + 1
                     for i in [rel['head_span'],rel['child_span']]:
                         if 'conceptnet' in i.keys() and i['conceptnet'] in CSKGMapper.keys():
-                            i['conceptnet'] = CSKGMapper[i['conceptnet']]
+                            i['conceptnet'] = 'c_'+ str(CSKGMapper[i['conceptnet']])
                         elif 'conceptnet' in i.keys() and not (i['conceptnet'] in CSKGMapper.keys()):
                             CSKGMapper[i['conceptnet']] = CSKGMapper['IDcounter']
                             CSKGMapper['IDcounter'] = CSKGMapper['IDcounter'] + 1
-                            i['conceptnet'] = CSKGMapper[i['conceptnet']]
+                            i['conceptnet'] = 'c_'+str(CSKGMapper[i['conceptnet']])
             convs.append(conv)
             f_o.write(json.dumps(conv)+'\n')
     """with open(output,'w') as f_o:
@@ -397,8 +434,28 @@ def CSKG_REL_mapper(input, output, cskg_mapper, rel_mapper):
         with open(i,'wb') as handle:
             pickle.dump(y, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+def experimental_setup(data_file, output_file):
+    if data_file == output_file:
+        raise Exception('Data file and Output file must be different paths')
+    f_o = open(output_file,'w')
+    with open(data_file,'r') as f:
+        for idx,line in enumerate(f.readlines()):
+            conv = json.loads(line)
+            if (idx %2) == 0:
+                conv['utterances'] = sorted(conv['utterances'], key =lambda x: x['turn'])
+                pkg = conv['utterances'][-1]['pkg']
+                for utt in conv['utterances']:
+                    utt['pkg'] = pkg
+
+            f_o.write(json.dumps(conv)+'\n')
+
+    print('Experimental Setup Done!!!')
 if __name__ == '__main__':
     personal_id_fixer("data/total_dataset2.jsonl","data/total_dataset3.jsonl")
     CSKG_REL_mapper("data/total_dataset3.jsonl","data/total_dataset4.jsonl", "data/cskg_dict.pickle","data/rel_dict.pickle")
-    pkg_constructor("data/total_dataset3.jsonl", "data/total_dataset3.jsonl")
-    create_input_data_file("data/total_dataset3.jsonl", 10000, "data/pec_convs.jsonl")
+    pkg_constructor("data/total_dataset4.jsonl", "data/total_dataset5.jsonl","data/rel_dict.pickle")
+    experimental_setup("data/total_dataset5.jsonl","data/total_dataset6.jsonl")
+    create_input_data_file("data/total_dataset6.jsonl", 10000, "data/pec_convs.jsonl")
+    os.system('split -l 100 data/pec_convs.jsonl')
+    os.system('mv xaa data/input1.jsonl')
+    os.system('mv xab data/input2.jsonl')

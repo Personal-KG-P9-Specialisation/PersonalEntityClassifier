@@ -336,7 +336,7 @@ def create_input(tokenizer, utt, max_utt_len):
     assert len(token_types) == n_word_nodes+n_relation_nodes+n_tail_mentions+ n_pkg_ents + n_pkg_rels+n_pkg_cskg+2
     em_indices.extend(all_tail_indices)
     assert len(personal_ids) == len(em_indices)
-    return {'n_pkg_ents':n_pkg_ents,'n_pkg_rels':n_pkg_rels, 'n_word_nodes': n_word_nodes, 'n_relation_nodes': n_relation_nodes,'n_object_nodes':n_tail_mentions, 'nodes': nodes,
+    return {'n_pkg_ents':n_pkg_ents,'n_pkg_cskg':n_pkg_cskg,'n_pkg_rels':n_pkg_rels, 'n_word_nodes': n_word_nodes, 'n_relation_nodes': n_relation_nodes,'n_object_nodes':n_tail_mentions, 'nodes': nodes,
                                       'soft_position': soft_position, 'adj': adj.tolist(),
                                       'token_type_ids': token_types, 'entity_mention_idx':(em_indices,personal_ids)}
 
@@ -451,6 +451,8 @@ def experimental_setup(data_file, output_file):
 
     print('Experimental Setup Done!!!')
 if __name__ == '__main__':
+    #exec(open('data/preprocessor.py').read())
+    os.system('cd data && python -m preprocessor && cd ..')
     personal_id_fixer("data/total_dataset2.jsonl","data/total_dataset3.jsonl")
     CSKG_REL_mapper("data/total_dataset3.jsonl","data/total_dataset4.jsonl", "data/cskg_dict.pickle","data/rel_dict.pickle")
     pkg_constructor("data/total_dataset4.jsonl", "data/total_dataset5.jsonl","data/rel_dict.pickle")
@@ -459,3 +461,5 @@ if __name__ == '__main__':
     os.system('split -l 100 data/pec_convs.jsonl')
     os.system('mv xaa data/input1.jsonl')
     os.system('mv xab data/input2.jsonl')
+    os.system('rm data/total_dataset2.jsonl data/total_dataset3.jsonl data/total_dataset4.jsonl data/total_dataset5.jsonl data/total_dataset6.jsonl')
+    print('Input data completely finished')

@@ -26,7 +26,14 @@ RUN rm -rf PKGAnnotationSystem
 #RUN cd code/data && python -m preprocessor
 
 #RUN python -m utils
-RUN pip install spacy && pip install neuralcoref && pip install stanfordcorenlp
+RUN pip install spacy && pip install stanfordcorenlp
+RUN python -m spacy download en
+
+#Download neuralCoref
+RUN git clone https://github.com/huggingface/neuralcoref.git
+RUN apt-get -y install build-essential
+RUN cd neuralcoref && pip install -r requirements.txt && pip install -e .
+
 COPY / code/
 RUN chmod +x code/run.sh
 CMD ['code/run.sh']

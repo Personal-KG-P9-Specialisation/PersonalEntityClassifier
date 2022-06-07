@@ -17,7 +17,7 @@ from fastNLP import RandomSampler, TorchLoaderIter, LossInForward, Trainer, Test
 
 from utils import MicroMetric
 from model import CoLAKE
-from dataset import PKGDataSet
+from dataset import PKGDataSet,PKGDatasetEvenDist
 
 
 BATCH_SIZE = 16
@@ -67,7 +67,7 @@ gradient_clip_callback = GradientClipCallback(clip_value=1, clip_type='norm')
 warmup_callback = WarmupCallback(warmup=WARM_UP, schedule='linear')
 
 bsz = BATCH_SIZE // GRAD_ACCUMULATION
-train_set = PKGDataSet('data/input1.jsonl')
+train_set = PKGDatasetEvenDist('data/input1.jsonl')
 dev_set = PKGDataSet('data/input2.jsonl')
 test_set = PKGDataSet('data/input3.jsonl')
 train_data_iter = TorchLoaderIter(dataset=train_set,

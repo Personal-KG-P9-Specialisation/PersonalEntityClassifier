@@ -59,7 +59,7 @@ class MicroMetric(MetricBase):
                 #self.num_predict += 1
 
     def get_metric(self, reset=True):
-        if self.true_positive+self.true_negative+self.false_positive+self.false_negative > 0:
+        if self.true_positive+self.false_positive > 0:
             micro_precision = self.true_positive / (self.true_positive+ self.false_positive)
         else:
             micro_precision = 0.

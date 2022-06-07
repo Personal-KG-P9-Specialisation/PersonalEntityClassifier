@@ -4,16 +4,19 @@ from fastNLP.core.utils import _get_func_signature
 from sklearn.metrics import f1_score, precision_recall_fscore_support
 import itertools
 import matplotlib.pyplot as plt
-import pickle, os
+import pickle, os,sys
 
 class MicroMetric(MetricBase):
     def __init__(self, pred=None, target=None, no_relation_idx=0):
         super().__init__()
         self._init_param_map(pred=pred, target=target, seq_len=None)
-        self.no_relation = no_relation_idx
-        self.num_predict = 0
-        self.num_golden = 0
+        #self.no_relation = no_relation_idx
+        #self.num_predict = 0
+        #self.num_golden = 0
         self.true_positive = 0
+        self.true_negative = 0
+        self.false_positive = 0
+        self.false_negative = 0
 
     def evaluate(self, pred, target, seq_len=None):
         '''
@@ -38,19 +41,22 @@ class MicroMetric(MetricBase):
         preds = pred.detach().cpu().numpy().tolist()
         targets = target.to('cpu').numpy().tolist()
         for pred, target in zip(preds, targets):
-            if pred == target and pred != self.no_relation:
+            if pred == target and pred == [0,1]:
+                self.true_negative += 1
+            elif pred == target and pred == [1,0]:
                 self.true_positive += 1
-            if target != self.no_relation:
-                self.num_golden += 1
-            if pred != self.no_relation:
-                self.num_predict += 1
+            elif (not pred == target) and pred == [0,1]:
+                self.false_negative += 1
+            elif (not pred == target) and pred == [1,0]:
+                self.false_positive += 1
+                #self.num_predict += 1
 
     def get_metric(self, reset=True):
-        if self.num_predict > 0:
-            micro_precision = self.true_positive / self.num_predict
+        if self.true_positive+self.true_negative+self.false_positive+self.false_negative > 0:
+            micro_precision = self.true_positive / (self.true_positive+ self.false_positive)
         else:
             micro_precision = 0.
-        micro_recall = self.true_positive / self.num_golden
+        micro_recall = self.true_positive / (self.true_positive+self.false_negative)
         micro_fscore = self._calculate_f1(micro_precision, micro_recall)
         evaluate_result = {
             'f_score': micro_fscore,
@@ -59,9 +65,10 @@ class MicroMetric(MetricBase):
         }
 
         if reset:
-            self.num_predict = 0
-            self.num_golden = 0
             self.true_positive = 0
+            self.true_negative = 0
+            self.false_positive = 0
+            self.false_negative = 0
 
         return evaluate_result
 
@@ -458,8 +465,12 @@ if __name__ == '__main__':
     pkg_constructor("data/total_dataset4.jsonl", "data/total_dataset5.jsonl","data/rel_dict.pickle")
     experimental_setup("data/total_dataset5.jsonl","data/total_dataset6.jsonl")
     create_input_data_file("data/total_dataset6.jsonl", 10000, "data/pec_convs.jsonl")
-    os.system('split -l 100 data/pec_convs.jsonl')
+    os.system('split -l 120 data/pec_convs.jsonl')
     os.system('mv xaa data/input1.jsonl')
-    os.system('mv xab data/input2.jsonl')
+    os.system('mv xab xab2')
+    os.system('split -l 40 xab2')
+    os.system('mv xaa data/input2.jsonl')
+    os.system('mv xab data/input3.jsonl')
+    
     os.system('rm data/total_dataset2.jsonl data/total_dataset3.jsonl data/total_dataset4.jsonl data/total_dataset5.jsonl data/total_dataset6.jsonl')
     print('Input data completely finished')

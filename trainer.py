@@ -35,8 +35,8 @@ NUM_RELS_URG = 10
 N_PERS_ENTS = 10
 N_PERS_CSKG = 10
 N_PERS_RELS = 10
-NUM_CSKG = 50
-NUM_REL = 15
+NUM_CSKG = 837
+NUM_REL = 20
 
 config = RobertaConfig.from_pretrained('roberta-base', type_vocab_size=6) #possibly 7
 model = CoLAKE(config, NUM_WORDS_URG, NUM_OBJS_URG, NUM_RELS_URG, N_PERS_ENTS, N_PERS_CSKG, N_PERS_RELS, NUM_CSKG, NUM_REL)
@@ -66,12 +66,16 @@ gradient_clip_callback = GradientClipCallback(clip_value=1, clip_type='norm')
 warmup_callback = WarmupCallback(warmup=WARM_UP, schedule='linear')
 
 bsz = BATCH_SIZE // GRAD_ACCUMULATION
-train_set = PKGDataSet('data/xaa')
-dev_set = PKGDataSet('data/xab')
+train_set = PKGDataSet('data/input1.jsonl')
+dev_set = PKGDataSet('data/input2.jsonl')
+test_set = PKGDataSet('data/input3.jsonl')
 train_data_iter = TorchLoaderIter(dataset=train_set,
                                       batch_size=bsz,
                                       collate_fn=train_set.collate_fn)
 dev_data_iter = TorchLoaderIter(dataset=dev_set,
+                                    batch_size=bsz,
+                                    collate_fn=dev_set.collate_fn)
+test_iter = TorchLoaderIter(dataset=test_set,
                                     batch_size=bsz,
                                     collate_fn=dev_set.collate_fn)
 #args = TrainingArguments('test',do_train=True)
@@ -106,4 +110,9 @@ else:
                       use_tqdm=True)
 
 trainer.train()
+if len(sys.argv) >=2 and str(sys.argv[1]) == 'gpu': 
+    tester = Tester(data=test_iter, model=model, metrics=metrics, device=devices)
+else:
+    tester = Tester(data=test_iter, model=model, metrics=metrics)
+tester.test()
 

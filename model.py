@@ -51,6 +51,7 @@ class CoLAKE(RobertaForMaskedLM):
             head_mask=None,
             inputs_embeds=None,
             n_pkg_ents=None,
+            n_pkg_cskg=None,
             n_pkg_rels=None, 
             n_word_nodes=None, 
             n_relation_nodes=None,
@@ -61,6 +62,7 @@ class CoLAKE(RobertaForMaskedLM):
     ):
         n_pkg_ents=n_pkg_ents[0]
         n_pkg_rels=n_pkg_rels[0]
+        n_pkg_cskg = n_pkg_cskg[0]
         n_relation_nodes=n_relation_nodes[0]
         n_tail_mentions=n_tail_mentions[0]
         #n_pers_cskg=n_pers_cskg[0]
@@ -68,30 +70,34 @@ class CoLAKE(RobertaForMaskedLM):
         #n_obj_nodes = n_obj_nodes[0]
         #print(input_ids.shape)
         #PKG
-        pkg_entities = input_ids[:, : n_pkg_ents]
+        start_tokens=self.roberta.embeddings.word_embeddings(input_ids[:, 0])
+        
+        pkg_entities = input_ids[:, 0: n_pkg_ents]
         t_pkg_entities = torch.zeros([pkg_entities.shape[0], pkg_entities.shape[1],self.hidden_size1], dtype=torch.int32)
         if not n_pkg_ents == 0:
             for i in range(pkg_entities.shape[0]):
                 t_pkg_entities[i][0][pkg_entities[i]] = 1
             pkg_entities = t_pkg_entities
-        pkg_relations = input_ids[:,n_pkg_ents : n_pkg_ents+n_pkg_rels]
-        
-        if not n_pkg_rels == 0:
+        pkg_cskg = self.cskg_ent_embeddings(input_ids[:,n_pkg_ents+1 : n_pkg_ents+1 +n_pkg_cskg])
+        pkg_relations = self.rel_embeddings(input_ids[:,n_pkg_ents+1 +n_pkg_cskg : n_pkg_ents+1 +n_pkg_cskg+n_pkg_rels])
+        sep_token = self.roberta.embeddings.word_embeddings(input_ids[:,n_pkg_ents+1 +n_pkg_cskg+n_pkg_rels : n_pkg_ents+n_pkg_cskg+n_pkg_rels+2])
+        start_tokens = torch.reshape(start_tokens,(sep_token.shape[0],1,self.hidden_size1))
+        """if not n_pkg_rels == 0:
             t_pkg_rels = torch.zeros([pkg_relations.shape[0], pkg_relations.shape[1],self.hidden_size1], dtype=torch.int32)
             for i in range(pkg_relations.shape[0]):
                 t_pkg_rels[i][0][pkg_relations[i]] = 1
-            pkg_relations = t_pkg_rels
+            pkg_relations = t_pkg_rels"""
         
 
         
         #URG
-        word_embeddings = self.roberta.embeddings.word_embeddings( input_ids[:, n_pkg_ents+n_pkg_rels: n_pkg_ents+n_pkg_rels+ n_word_nodes])  # batch x n_word_nodes x hidden_size
-        rel_embeddings =input_ids[:, n_pkg_ents+n_pkg_rels+ n_word_nodes:n_pkg_ents+n_pkg_rels+ n_word_nodes+n_relation_nodes]
+        word_embeddings = self.roberta.embeddings.word_embeddings( input_ids[:, n_pkg_ents+n_pkg_cskg+n_pkg_rels+2: n_pkg_ents+n_pkg_cskg+n_pkg_rels+2+ n_word_nodes])  # batch x n_word_nodes x hidden_size
+        rel_embeddings =input_ids[:, n_pkg_ents+n_pkg_cskg+n_pkg_rels+2+ n_word_nodes:n_pkg_ents+n_pkg_cskg+n_pkg_rels+2+ n_word_nodes+n_relation_nodes]
         #print(input_ids[:, n_pkg_ents+n_pkg_rels+ n_word_nodes-1:n_pkg_ents+n_pkg_rels+ n_word_nodes+n_relation_nodes+2])
         rel_embeddings = self.rel_embeddings(
             rel_embeddings
             )
-        obj_embeddings = self.roberta.embeddings.word_embeddings( input_ids[:, n_pkg_ents+n_pkg_rels+ n_word_nodes+n_relation_nodes:])
+        obj_embeddings = self.roberta.embeddings.word_embeddings( input_ids[:, n_pkg_ents+n_pkg_cskg+n_pkg_rels+2+ n_word_nodes+n_relation_nodes:])
         
         #PKG
         #pers_embeddings = input_ids[:, n_word_nodes + n_obj_nodes+n_rel_nodes : n_word_nodes + n_obj_nodes+n_rel_nodes+n_pers_nodes]
@@ -104,10 +110,10 @@ class CoLAKE(RobertaForMaskedLM):
         obj_embeddings = obj_embeddings[0]"""
         
         if pkg_relations.shape[1] == 0:
-            inputs_embeds = torch.cat([word_embeddings, rel_embeddings,obj_embeddings],
+            inputs_embeds = torch.cat([start_tokens,sep_token, word_embeddings, rel_embeddings,obj_embeddings],
                                   dim=1)  # batch x seq_len x hidden_size
         else:
-            inputs_embeds = torch.cat([pkg_entities,pkg_relations ,word_embeddings, rel_embeddings,obj_embeddings],
+            inputs_embeds = torch.cat([start_tokens, pkg_entities,pkg_cskg,pkg_relations ,sep_token,word_embeddings, rel_embeddings,obj_embeddings],
                                   dim=1)  # batch x seq_len x hidden_size
 
         outputs = self.roberta(

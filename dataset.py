@@ -9,6 +9,8 @@ class PKGDataSet(Dataset):
         self.path = path
         self.data = []
         self.__read_file__()
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
     
     def __read_file__(self):
         with open(self.path, 'r') as f:
@@ -224,6 +226,8 @@ class PKGDataSet(Dataset):
                 batch_x[k] =torch.tensor(v, dtype=torch.float32)
             else:
                 batch_x[k] = torch.tensor(v)
+            batch_x[k] = batch_x[k].to(self.device)
         for k,v in batch_y.items():
             batch_y[k] =torch.tensor(v, dtype=torch.float32)
+            #batch_y[k] = batch_y[k].to(self.device)
         return (batch_x, batch_y)

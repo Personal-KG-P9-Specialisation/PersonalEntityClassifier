@@ -20,7 +20,7 @@ from model import CoLAKE
 from dataset import PKGDataSet
 
 
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 EPOCHS=100
 GRAD_ACCUMULATION=1
 WARM_UP=0.1
@@ -37,10 +37,11 @@ N_PERS_CSKG = 10
 N_PERS_RELS = 10
 NUM_CSKG = 837
 NUM_REL = 20
-
+devices = list(range(torch.cuda.device_count()))
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 config = RobertaConfig.from_pretrained('roberta-base', type_vocab_size=6) #possibly 7
 model = CoLAKE(config, NUM_WORDS_URG, NUM_OBJS_URG, NUM_RELS_URG, N_PERS_ENTS, N_PERS_CSKG, N_PERS_RELS, NUM_CSKG, NUM_REL)
-
+model = model.to(device)
 # fine-tune
 no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight', 'embedding']
 param_optimizer = list(model.named_parameters())
@@ -57,7 +58,7 @@ metrics = [MicroMetric(pred='pred', target='target')]
 
 #test_data_iter = TorchLoaderIter(dataset=test_set, batch_size=BATCH_SIZE, sampler=RandomSampler(),
 #                                     num_workers=4)
-devices = list(range(torch.cuda.device_count()))
+
 #tester = Tester(data=test_data_iter, model=model, metrics=metrics, device=devices)
     # tester.test()
 
@@ -92,7 +93,7 @@ if len(sys.argv) >=2 and str(sys.argv[1]) == 'gpu':
                       metrics=metrics,
                       callbacks=[gradient_clip_callback, warmup_callback],
                       #callbacks=[fitlog_callback, gradient_clip_callback, warmup_callback],
-                      device=devices,
+                      device=device,
                       use_tqdm=True)
 else:
     trainer = Trainer(train_data=train_data_iter,

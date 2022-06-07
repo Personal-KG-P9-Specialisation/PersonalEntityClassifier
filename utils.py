@@ -6,6 +6,12 @@ import itertools
 import matplotlib.pyplot as plt
 import pickle, os,sys
 
+def round_pred(lst):
+    if lst[0] > lst[1]:
+        return [1,0]
+    else:
+        return [0,1]
+
 class MicroMetric(MetricBase):
     def __init__(self, pred=None, target=None, no_relation_idx=0):
         super().__init__()
@@ -40,14 +46,15 @@ class MicroMetric(MetricBase):
 
         preds = pred.detach().cpu().numpy().tolist()
         targets = target.to('cpu').numpy().tolist()
-        for pred, target in zip(preds, targets):
-            if pred == target and pred == [0,1]:
+        preds = [round_pred(x) for x in preds]
+        for predx, targ in zip(preds, targets):
+            if predx == targ and predx == [0,1]:
                 self.true_negative += 1
-            elif pred == target and pred == [1,0]:
+            elif predx == targ and predx == [1,0]:
                 self.true_positive += 1
-            elif (not pred == target) and pred == [0,1]:
+            elif (not predx == targ) and predx == [0,1]:
                 self.false_negative += 1
-            elif (not pred == target) and pred == [1,0]:
+            elif (not predx == targ) and predx == [1,0]:
                 self.false_positive += 1
                 #self.num_predict += 1
 
@@ -56,7 +63,10 @@ class MicroMetric(MetricBase):
             micro_precision = self.true_positive / (self.true_positive+ self.false_positive)
         else:
             micro_precision = 0.
-        micro_recall = self.true_positive / (self.true_positive+self.false_negative)
+        if self.true_positive+self.false_negative > 0:
+            micro_recall = self.true_positive / (self.true_positive+self.false_negative)
+        else:
+            micro_recall = 0
         micro_fscore = self._calculate_f1(micro_precision, micro_recall)
         evaluate_result = {
             'f_score': micro_fscore,

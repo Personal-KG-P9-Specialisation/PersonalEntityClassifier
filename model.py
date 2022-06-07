@@ -20,7 +20,7 @@ class CoLAKE(RobertaForMaskedLM):
         
         self.cskg_ent_embeddings = nn.Embedding(num_cskg, config.hidden_size, padding_idx=1)
         self.rel_embeddings = nn.Embedding(num_rel, config.hidden_size, padding_idx=1)
-        
+        self.device01 = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.apply(self._init_weights)
         if rel_emb is not None:
             self.rel_embeddings = nn.Embedding.from_pretrained(rel_emb, padding_idx=1)
@@ -78,6 +78,7 @@ class CoLAKE(RobertaForMaskedLM):
             for i in range(pkg_entities.shape[0]):
                 t_pkg_entities[i][0][pkg_entities[i]] = 1
             pkg_entities = t_pkg_entities
+        pkg_entities = pkg_entities.to(self.device01)
         pkg_cskg = self.cskg_ent_embeddings(input_ids[:,n_pkg_ents+1 : n_pkg_ents+1 +n_pkg_cskg])
         pkg_relations = self.rel_embeddings(input_ids[:,n_pkg_ents+1 +n_pkg_cskg : n_pkg_ents+1 +n_pkg_cskg+n_pkg_rels])
         sep_token = self.roberta.embeddings.word_embeddings(input_ids[:,n_pkg_ents+1 +n_pkg_cskg+n_pkg_rels : n_pkg_ents+n_pkg_cskg+n_pkg_rels+2])
@@ -113,8 +114,7 @@ class CoLAKE(RobertaForMaskedLM):
             inputs_embeds = torch.cat([start_tokens,sep_token, word_embeddings, rel_embeddings,obj_embeddings],
                                   dim=1)  # batch x seq_len x hidden_size
         else:
-            inputs_embeds = torch.cat([start_tokens, pkg_entities,pkg_cskg,pkg_relations ,sep_token,word_embeddings, rel_embeddings,obj_embeddings],
-                                  dim=1)  # batch x seq_len x hidden_size
+            inputs_embeds = torch.cat([start_tokens, pkg_entities,pkg_cskg,pkg_relations ,sep_token,word_embeddings, rel_embeddings,obj_embeddings],                                  dim=1)  # batch x seq_len x hidden_size
 
         outputs = self.roberta(
             input_ids=None,

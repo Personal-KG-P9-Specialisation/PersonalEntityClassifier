@@ -262,6 +262,34 @@ class PKGDatasetEvenDist(PKGDataSet):
                 new_data.append(el)
         self.data = new_data
 
+class PKGDatasetSig(PKGDatasetEvenDist):
+    def __init__(self, path):
+        super().__init__(path)
+    
+    def __add_element_gt__(self,utt):
+        pers_ent, g_t = set(),[]
+        pkg = utt['pkg']
+        pkg = [tuple(x) for x in pkg]
+        for sub,_,obj in pkg:
+            for i in [sub,obj]:
+                if not str(i).startswith('c_'):
+                    pers_ent.add(i)
+        token_types = []
+        em_indices,personal_ids = utt['input_pec']['entity_mention_idx']
+        ems = list(set(personal_ids))
+        for em in ems:
+            temp = utt['input_pec']['token_type_ids'].copy()
+            for pers_id,em_index in zip(personal_ids,em_indices):
+                if em == pers_id:
+                    temp[em_index-1] = 5
+            token_types.append(temp)
+
+            if em in pers_ent:
+                g_t.append(1)
+            else:
+                g_t.append(0)
+        return token_types, g_t
+
 
 
 class PKGDataSet2(PKGDataSet):

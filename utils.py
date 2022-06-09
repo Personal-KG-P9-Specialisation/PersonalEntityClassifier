@@ -8,9 +8,9 @@ import pickle, os,sys
 
 def round_pred(lst):
     if lst[0] > lst[1]:
-        return [1,0]
+        return [1.0,0.0]
     else:
-        return [0,1]
+        return [0.0,1.0]
 
 class MicroMetric(MetricBase):
     def __init__(self, pred=None, target=None, no_relation_idx=0):
@@ -48,13 +48,13 @@ class MicroMetric(MetricBase):
         targets = target.to('cpu').numpy().tolist()
         preds = [round_pred(x) for x in preds]
         for predx, targ in zip(preds, targets):
-            if predx == targ and predx == [0,1]:
+            if predx == targ and predx == [0.0,1.0]:
                 self.true_negative += 1
-            elif predx == targ and predx == [1,0]:
+            elif predx == targ and predx == [1.0,0.0]:
                 self.true_positive += 1
-            elif (not predx == targ) and predx == [0,1]:
+            elif (not predx == targ) and predx == [0.0,1.0]:
                 self.false_negative += 1
-            elif (not predx == targ) and predx == [1,0]:
+            elif (not predx == targ) and predx == [1.0,0.0]:
                 self.false_positive += 1
                 #self.num_predict += 1
 
@@ -86,6 +86,40 @@ class MicroMetric(MetricBase):
         if r == 0.:
             return 0.
         return 2 * p * r / float(p + r)
+class LossMetric(MetricBase):
+    def __init__(self, loss=None):
+        super().__init__()
+        self._init_param_map(loss=loss, seq_len=None)
+        self.total_loss = 0
+        self.count = 0
+        
+
+    def evaluate(self, loss, seq_len=None):
+        '''
+        :param pred: batch_size
+        :param target: batch_size
+        :param seq_len: not uesed when doing text classification
+        :return:
+        '''
+
+        if not isinstance(loss, torch.Tensor):
+            raise TypeError(f"`loss` in {_get_func_signature(self.evaluate)} must be torch.Tensor,"
+                            f"got {type(pred)}.")
+
+        
+        l = loss.detach().cpu().numpy().tolist()
+        self.total_loss += l
+        self.count += 1
+
+    def get_metric(self, reset=True):
+        evaluate_result = {
+            'loss': self.total_loss/self.count
+        }
+        if reset:
+            self.total_loss = 0
+            self.count = 0
+
+        return evaluate_result
 
 import json, networkx as nx, numpy as np
 from transformers import RobertaTokenizer

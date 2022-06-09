@@ -15,16 +15,16 @@ from fastNLP import FitlogCallback, WarmupCallback, GradientClipCallback
 from fastNLP import RandomSampler, TorchLoaderIter, LossInForward, Trainer, Tester
 #from transformers import Trainer, TrainingArguments
 
-from utils import MicroMetric
-from model import CoLAKE
-from dataset import PKGDataSet,PKGDatasetEvenDist
+from utils import MicroMetric,LossMetric
+from model import URG, URG_Sig
+from dataset import PKGDataSet,PKGDatasetEvenDist,PKGDatasetSig
 
 
 BATCH_SIZE = 16
-EPOCHS=100
+EPOCHS=200
 GRAD_ACCUMULATION=1
 WARM_UP=0.1
-LR=5e-5
+LR=0.1#1e-4#5e-5
 BETA=0.999
 WEIGHT_DECAY=0.01
 
@@ -40,7 +40,7 @@ NUM_REL = 20
 devices = list(range(torch.cuda.device_count()))
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 config = RobertaConfig.from_pretrained('roberta-base', type_vocab_size=6) #possibly 7
-model = CoLAKE(config, NUM_WORDS_URG, NUM_OBJS_URG, NUM_RELS_URG, N_PERS_ENTS, N_PERS_CSKG, N_PERS_RELS, NUM_CSKG, NUM_REL)
+model = URG_Sig(config, NUM_CSKG, NUM_REL)
 model = model.to(device)
 # fine-tune
 no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight', 'embedding']
@@ -52,7 +52,7 @@ optimizer_grouped_parameters = [
 ]
 optimizer = optim.AdamW(optimizer_grouped_parameters, lr=LR, betas=(0.9, BETA), eps=1e-6)
 
-metrics = [MicroMetric(pred='pred', target='target')]
+metrics = [MicroMetric(pred='pred', target='target'),LossMetric(loss='loss')]
 
 
 
@@ -67,18 +67,18 @@ gradient_clip_callback = GradientClipCallback(clip_value=1, clip_type='norm')
 warmup_callback = WarmupCallback(warmup=WARM_UP, schedule='linear')
 
 bsz = BATCH_SIZE // GRAD_ACCUMULATION
-train_set = PKGDatasetEvenDist('data/input1.jsonl')
-dev_set = PKGDataSet('data/input2.jsonl')
-test_set = PKGDataSet('data/input3.jsonl')
+train_set = PKGDatasetSig('data/input1.jsonl')
+dev_set = PKGDatasetSig('data/input2.jsonl')
+test_set = PKGDatasetSig('data/input3.jsonl')
 train_data_iter = TorchLoaderIter(dataset=train_set,
                                       batch_size=bsz,
-                                      collate_fn=train_set.collate_fn)
+                                      collate_fn=train_set.collate_fn, sampler=RandomSampler())
 dev_data_iter = TorchLoaderIter(dataset=dev_set,
                                     batch_size=bsz,
-                                    collate_fn=dev_set.collate_fn)
+                                    collate_fn=dev_set.collate_fn, sampler=RandomSampler())
 test_iter = TorchLoaderIter(dataset=test_set,
                                     batch_size=bsz,
-                                    collate_fn=dev_set.collate_fn)
+                                    collate_fn=dev_set.collate_fn, sampler=RandomSampler())
 #args = TrainingArguments('test',do_train=True)
 #trainer = Trainer(model=model,train_dataset=train_set,eval_dataset=train_set,args=args)
 if len(sys.argv) >=2 and str(sys.argv[1]) == 'gpu':

@@ -5,11 +5,12 @@ import json
 import torch
 
 class PKGDataSet(Dataset):
-    def __init__(self, path):
+    def __init__(self, path,max_pkg_ents=None,max_pkg_rels=None,max_pkg_cskg=None,max_words=None,max_rels=None,max_tails=None):
         self.path = path
         self.data = []
         self.__read_file__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.max_pkg_ents, self.max_pkg_rels, self.max_pkg_cskg,self.max_words,self.max_rels,self.max_tails = max_pkg_ents,max_pkg_rels,max_pkg_cskg,max_words,max_rels,max_tails
         
     #TODO maybe skip pronouns as well
     def __read_file__(self):
@@ -37,6 +38,7 @@ class PKGDataSet(Dataset):
         token_types = []
         em_indices,personal_ids = utt['input_pec']['entity_mention_idx']
         ems = list(set(personal_ids))
+        #ems = self.filter_ems(ems)
         for em in ems:
             temp = utt['input_pec']['token_type_ids'].copy()
             for pers_id,em_index in zip(personal_ids,em_indices):
@@ -119,6 +121,12 @@ class PKGDataSet(Dataset):
             batch_words.append(word_nodes)
             batch_rels.append(rel_nodes)
             batch_object.append(tail_nodes)
+            assert len(pkg_ents) <= self.max_pkg_ents
+            assert len(pkg_rels) <= self.max_pkg_rels
+            assert len(pkg_cskg_ents) <= self.max_pkg_cskg
+            assert len(word_nodes) <= self.max_words
+            assert len(rel_nodes) <= self.max_rels
+            assert len(tail_nodes) <= self.max_tails
 
             #batch_y['pkg_ent_seq_len'].append()
             max_pkg_ents = len(pkg_ents) if len(pkg_ents) > max_pkg_ents else max_pkg_ents
@@ -128,17 +136,18 @@ class PKGDataSet(Dataset):
             max_rels = len(rel_nodes) if len(rel_nodes) > max_rels else max_rels
             max_tails = len(tail_nodes) if len(tail_nodes) > max_tails else max_tails
 
-        self.max_pkg_ents, self.max_pkg_rels, self.max_pkg_cskg,self.max_words,self.max_rels,self.max_tails = max_pkg_ents,max_pkg_rels,max_pkg_cskg,max_words,max_rels,max_tails
+        if self.max_pkg_ents == None:
+            self.max_pkg_ents, self.max_pkg_rels, self.max_pkg_cskg,self.max_words,self.max_rels,self.max_tails = max_pkg_ents,max_pkg_rels,max_pkg_cskg,max_words,max_rels,max_tails
         #Padding
-        seq_len = max_pkg_ents +max_pkg_cskg+ max_pkg_rels +max_words+max_rels+max_tails+2
+        seq_len = self.max_pkg_ents +self.max_pkg_cskg+ self.max_pkg_rels +self.max_words+self.max_rels+self.max_tails+2
         self.seq_len= seq_len
         for i in range(len(batch_words)):
-            pkg_ent_pad = max_pkg_ents - len(batch_pkg_ents[i])
-            pkg_cskg_pad = max_pkg_cskg - len(batch_pkg_cskg_ents[i])
-            pkg_rels_pad = max_pkg_rels - len(batch_pkg_rels[i])
-            word_pad = max_words - len(batch_words[i])
-            rels_pad = max_rels - len(batch_rels[i])
-            tail_pad = max_tails - len(batch_object[i])
+            pkg_ent_pad = self.max_pkg_ents - len(batch_pkg_ents[i])
+            pkg_cskg_pad = self.max_pkg_cskg - len(batch_pkg_cskg_ents[i])
+            pkg_rels_pad = self.max_pkg_rels - len(batch_pkg_rels[i])
+            word_pad = self.max_words - len(batch_words[i])
+            rels_pad = self.max_rels - len(batch_rels[i])
+            tail_pad = self.max_tails - len(batch_object[i])
 
             pkg_ent_vec =batch_pkg_ents[i] + [1] * pkg_ent_pad
             pkg_cskg_vec = batch_pkg_cskg_ents[i] + [1] * pkg_cskg_pad
@@ -212,12 +221,12 @@ class PKGDataSet(Dataset):
                              torch.zeros(seq_len,tail_pad, dtype=torch.int)),dim=1)
             batch_x['attention_mask'][i] = adj
             
-            batch_x['n_pkg_ents'][i] = max_pkg_ents
-            batch_x['n_pkg_cskg'][i] = max_pkg_cskg
-            batch_x['n_pkg_rels'][i] = max_pkg_rels
-            batch_x['n_word_nodes'][i] = max_words
-            batch_x['n_relation_nodes'][i] = max_rels
-            batch_x['n_tail_mentions'][i] = max_tails
+            batch_x['n_pkg_ents'][i] = self.max_pkg_ents
+            batch_x['n_pkg_cskg'][i] = self.max_pkg_cskg
+            batch_x['n_pkg_rels'][i] = self.max_pkg_rels
+            batch_x['n_word_nodes'][i] = self.max_words
+            batch_x['n_relation_nodes'][i] = self.max_rels
+            batch_x['n_tail_mentions'][i] = self.max_tails
         
         
         for k,v in batch_x.items():
@@ -235,8 +244,8 @@ class PKGDataSet(Dataset):
 
 
 class PKGDatasetEvenDist(PKGDataSet):
-    def __init__(self,path):
-        super().__init__(path)
+    def __init__(self, path, max_pkg_ents=None, max_pkg_rels=None, max_pkg_cskg=None, max_words=None, max_rels=None, max_tails=None):
+        super().__init__(path, max_pkg_ents, max_pkg_rels, max_pkg_cskg, max_words, max_rels, max_tails)
         self._evenizeData()
     
     def _evenizeData(self):
@@ -263,8 +272,8 @@ class PKGDatasetEvenDist(PKGDataSet):
         self.data = new_data
 
 class PKGDatasetSig(PKGDatasetEvenDist):
-    def __init__(self, path):
-        super().__init__(path)
+    def __init__(self, path, max_pkg_ents=None, max_pkg_rels=None, max_pkg_cskg=None, max_words=None, max_rels=None, max_tails=None):
+        super().__init__(path, max_pkg_ents, max_pkg_rels, max_pkg_cskg, max_words, max_rels, max_tails)
     
     def __add_element_gt__(self,utt):
         pers_ent, g_t = set(),[]

@@ -1,7 +1,7 @@
 import torch
 from fastNLP.core.metrics import MetricBase
 from fastNLP.core.utils import _get_func_signature
-from sklearn.metrics import f1_score, precision_recall_fscore_support
+from sklearn.metrics import f1_score, precision_recall_fscore_support,precision_score, recall_score, f1_score
 import itertools
 import matplotlib.pyplot as plt
 import pickle, os,sys
@@ -90,6 +90,10 @@ class MicroMetric(MetricBase):
 class PrecisionSigmoidMetric(MicroMetric):
     def __init__(self, pred=None, target=None, no_relation_idx=0):
         super().__init__(pred, target, no_relation_idx)
+        self.precision = 0
+        self.recall = 0
+        self.f1 = 0
+        self.count1 = 0
     def evaluate(self, pred, target, seq_len=None):
         '''
         :param pred: batch_size
@@ -112,9 +116,13 @@ class PrecisionSigmoidMetric(MicroMetric):
 
         preds = pred.detach().cpu().numpy().tolist()
         targets = target.to('cpu').numpy().tolist()
-        round_prediction = lambda x: 1 if x>= 0.5 else 0
+        round_prediction = lambda x: 1.0 if x>= 0.5 else 0.0
         preds = [round_prediction(x) for x in preds]
-        for predx, targ in zip(preds, targets):
+        self.precision = self.precision + precision_score(targets, preds, labels=np.unique(preds))
+        self.recall = self.recall + recall_score(targets, preds)
+        self.f1 = self.f1 + f1_score(targets, preds)
+        self.count1 += 1
+        """for predx, targ in zip(preds, targets):
             if predx == targ and predx == 0:
                 self.true_negative += 1
             elif predx == targ and predx == 1:
@@ -123,7 +131,20 @@ class PrecisionSigmoidMetric(MicroMetric):
                 self.false_negative += 1
             elif (not predx == targ) and predx == 1:
                 self.false_positive += 1
-                #self.num_predict += 1
+                #self.num_predict += 1"""
+    
+    def get_metric(self, reset=True):
+        evaluate_result = {
+            'f_score': self.f1/self.count1,
+            'precision': self.precision/self.count1,
+            'recall': self.recall/self.count1
+        }
+        if reset:
+            self.precision = 0
+            self.recall = 0
+            self.f1 = 0
+            self.count1 = 0
+        return evaluate_result
 
 class LossMetric(MetricBase):
     def __init__(self, loss=None):
@@ -143,7 +164,7 @@ class LossMetric(MetricBase):
 
         if not isinstance(loss, torch.Tensor):
             raise TypeError(f"`loss` in {_get_func_signature(self.evaluate)} must be torch.Tensor,"
-                            f"got {type(pred)}.")
+                            f"got {type(loss)}.")
 
         
         l = loss.detach().cpu().numpy().tolist()
@@ -430,8 +451,9 @@ def create_input(tokenizer, utt, max_utt_len):
                                       'soft_position': soft_position, 'adj': adj.tolist(),
                                       'token_type_ids': token_types, 'entity_mention_idx':(em_indices,personal_ids)}
 
-
-
+#TODO:needs test
+#removes agentX and rels with agent in span
+# ADD pronoun field
 def personal_id_fixer(input, output):
     convs = []
     with open(input,'r') as f:
@@ -439,14 +461,26 @@ def personal_id_fixer(input, output):
             convs.append(json.loads(line))
     f = open(output,'w')
     for conv in convs:
+        """if conv['Agent'] == 1:
+            rm_span = 9
+        elif conv['Agent'] == 2:
+            rm_span = 10"""
         pers_dict = {'counter':0}
         for utt in conv['utterances']:
+            #utt['text'] = utt['text'][rm_span:]
             if len(utt['relations']) == 0:
                 continue
             for rel in utt['relations']:
                 head = rel['head_span']
                 child = rel['child_span']
+                if utt['text'][head['start']:head['end']].lower() in ['i', 'my','he','his','her','they','their','our','we', 'she','hers']:
+                    head['isPronoun'] = 1
+                if utt['text'][child['start']:child['end']].lower() in ['i', 'my','he','his','her','they','their','our','we', 'she','hers']:
+                    child['isPronoun'] = 1
                 for em in [head, child]:
+                    #em['start'] = em['start']-rm_span
+                    #em['end'] = em['end']-rm_span
+                    assert utt['text'][em['start']:em['end']] == em['text']
                     if 'personal_id' in em.keys() and em['personal_id'] in pers_dict.keys():
                         em['personal_id'] = pers_dict[ em['personal_id'] ]
                     elif 'personal_id' in em.keys() and (not em['personal_id'] in pers_dict.keys()):

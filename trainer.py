@@ -19,22 +19,26 @@ from utils import MicroMetric,LossMetric,PrecisionSigmoidMetric
 from model import URG, URG_Sig
 from dataset import PKGDataSet,PKGDatasetEvenDist,PKGDatasetSig
 
+#For Sckit learn, which it handles correctly.
+import warnings
+warnings.filterwarnings('ignore')
 
 BATCH_SIZE = 16
 EPOCHS=200
 GRAD_ACCUMULATION=1
 WARM_UP=0.1
-LR=0.1#1e-4#5e-5
+LR=5e-5#1e-4#5e-5
 BETA=0.999
 WEIGHT_DECAY=0.01
 
 #Model Hyperparameters
-NUM_WORDS_URG = 100 
-NUM_OBJS_URG = 10
-NUM_RELS_URG = 10
-N_PERS_ENTS = 10
-N_PERS_CSKG = 10
-N_PERS_RELS = 10
+NUM_WORDS_URG = 24 
+NUM_OBJS_URG = 19#18
+NUM_RELS_URG = 5#,4
+N_PERS_ENTS = 24#20
+N_PERS_CSKG = 16
+N_PERS_RELS = 42#,36
+
 NUM_CSKG = 837
 NUM_REL = 20
 devices = list(range(torch.cuda.device_count()))
@@ -67,12 +71,25 @@ gradient_clip_callback = GradientClipCallback(clip_value=1, clip_type='norm')
 warmup_callback = WarmupCallback(warmup=WARM_UP, schedule='linear')
 
 bsz = BATCH_SIZE // GRAD_ACCUMULATION
-train_set = PKGDatasetSig('data/input1.jsonl')
-dev_set = PKGDatasetSig('data/input2.jsonl')
-test_set = PKGDatasetSig('data/input3.jsonl')
+train_set = PKGDatasetSig('data/input1.jsonl',max_pkg_ents=N_PERS_ENTS, max_pkg_rels=N_PERS_RELS, max_pkg_cskg=N_PERS_CSKG, max_words=NUM_WORDS_URG, max_rels=NUM_RELS_URG, max_tails=NUM_OBJS_URG)
+dev_set = PKGDatasetSig('data/input2.jsonl',max_pkg_ents=N_PERS_ENTS, max_pkg_rels=N_PERS_RELS, max_pkg_cskg=N_PERS_CSKG, max_words=NUM_WORDS_URG, max_rels=NUM_RELS_URG, max_tails=NUM_OBJS_URG)
+test_set = PKGDatasetSig('data/input3.jsonl',max_pkg_ents=N_PERS_ENTS, max_pkg_rels=N_PERS_RELS, max_pkg_cskg=N_PERS_CSKG, max_words=NUM_WORDS_URG, max_rels=NUM_RELS_URG, max_tails=NUM_OBJS_URG)
 train_data_iter = TorchLoaderIter(dataset=train_set,
                                       batch_size=bsz,
                                       collate_fn=train_set.collate_fn, sampler=RandomSampler())
+
+#Temp code to find max_pkg_ent,etc.
+"""n_pkg_ents,n_pkg_cskg,n_pkg_rels,n_word_nodes,n_relation_nodes,n_tail_mentions = 0,0,0,0,0,0
+for i,_ in train_data_iter.dataiter:
+    n_pkg_ents = i['n_pkg_ents'][0] if i['n_pkg_ents'][0] > n_pkg_ents else n_pkg_ents
+    n_pkg_rels = i['n_pkg_rels'][0] if i['n_pkg_rels'][0] > n_pkg_rels else n_pkg_rels
+    n_pkg_cskg =i['n_pkg_cskg'][0] if i['n_pkg_cskg'][0] > n_pkg_cskg else n_pkg_cskg
+    n_word_nodes = i['n_word_nodes'][0] if i['n_word_nodes'][0] > n_word_nodes else n_word_nodes
+    n_relation_nodes = i['n_relation_nodes'][0] if i['n_relation_nodes'][0] > n_relation_nodes else n_relation_nodes
+    n_tail_mentions = i['n_tail_mentions'][0] if i['n_tail_mentions'][0] > n_tail_mentions else n_tail_mentions
+    continue
+print(f'n_pkg_ents: {n_pkg_ents}, n_pkg_rels: {n_pkg_rels}, n_pkg_cskg: {n_pkg_cskg}, n_word_nodes: {n_word_nodes}')
+print(f'n_relation_nodes: {n_relation_nodes}, n_tail_mentions: {n_tail_mentions}')"""
 dev_data_iter = TorchLoaderIter(dataset=dev_set,
                                     batch_size=bsz,
                                     collate_fn=dev_set.collate_fn, sampler=RandomSampler())
@@ -116,4 +133,3 @@ if len(sys.argv) >=2 and str(sys.argv[1]) == 'gpu':
 else:
     tester = Tester(data=test_iter, model=model, metrics=metrics)
 tester.test()
-

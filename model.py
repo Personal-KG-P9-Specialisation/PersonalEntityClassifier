@@ -201,9 +201,11 @@ class URG_Sig(RobertaForMaskedLM):
         
         pkg_entities = input_ids[:, 0: n_pkg_ents]
         t_pkg_entities = torch.zeros([pkg_entities.shape[0], pkg_entities.shape[1],self.hidden_size1], dtype=torch.int32)
+        #t_pkg_entities = torch.zeros([pkg_entities.shape[0],self.hidden_size1], dtype=torch.int32)
         if not n_pkg_ents == 0:
             for i in range(pkg_entities.shape[0]):
                 t_pkg_entities[i][0][pkg_entities[i]] = 1
+                #t_pkg_entities[i][pkg_entities[i]] = 1
             pkg_entities = t_pkg_entities
         pkg_entities = pkg_entities.to(self.device01)
         pkg_cskg = self.cskg_ent_embeddings(input_ids[:,n_pkg_ents+1 : n_pkg_ents+1 +n_pkg_cskg])
@@ -252,21 +254,27 @@ class URG_Sig(RobertaForMaskedLM):
             inputs_embeds=inputs_embeds,
         )
         
-        sequence_output = outputs[0][:, 0, :]  # batch x seq_len x hidden_size
+        #sequence_output = outputs[0][:, 0, :]  # batch x seq_len x hidden_size
+        #print(torch.reshape(outputs[0],(outputs[0].shape[0],-1)).shape) #[16, 92160]
+        sequence_output = torch.reshape(outputs[0],(outputs[0].shape[0],-1))
         predictions = self.head(sequence_output)
         
         loss_fct = MSELoss(reduction='mean')
         #act_target = torch.nonzero((target==1.0), as_tuple=True)[1]
-        loss = loss_fct(predictions.view(-1), target.view(-1))
-        return {'loss': loss, 'pred': predictions}
+        p = torch.reshape(predictions,(-1,)).view(-1)
+        loss = loss_fct(p, target.view(-1))
+        return {'loss': loss, 'pred': p}
 
 class ClsHead(nn.Module):
     def __init__(self, config, num_labels, dropout=0.3):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.layer_norm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        #self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        #self.layer_norm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        #self.decoder = nn.Linear(config.hidden_size, num_labels, bias=False)
 
-        self.decoder = nn.Linear(config.hidden_size, num_labels, bias=False)
+        self.dense = nn.Linear(101376, 200)
+        self.layer_norm = BertLayerNorm(200, eps=config.layer_norm_eps)
+        self.decoder = nn.Linear(200, num_labels, bias=False)
         self.bias = nn.Parameter(torch.zeros(num_labels), requires_grad=True)
         self.dropout = nn.Dropout(p=dropout)
         self.decoder.bias = self.bias

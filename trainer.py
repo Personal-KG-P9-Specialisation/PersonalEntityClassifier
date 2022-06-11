@@ -15,7 +15,7 @@ from fastNLP import FitlogCallback, WarmupCallback, GradientClipCallback
 from fastNLP import RandomSampler, TorchLoaderIter, LossInForward, Trainer, Tester
 #from transformers import Trainer, TrainingArguments
 
-from utils import MicroMetric,LossMetric
+from utils import MicroMetric,LossMetric,PrecisionSigmoidMetric
 from model import URG, URG_Sig
 from dataset import PKGDataSet,PKGDatasetEvenDist,PKGDatasetSig
 
@@ -52,7 +52,7 @@ optimizer_grouped_parameters = [
 ]
 optimizer = optim.AdamW(optimizer_grouped_parameters, lr=LR, betas=(0.9, BETA), eps=1e-6)
 
-metrics = [MicroMetric(pred='pred', target='target'),LossMetric(loss='loss')]
+metrics = [PrecisionSigmoidMetric(pred='pred', target='target'),LossMetric(loss='loss')]
 
 
 

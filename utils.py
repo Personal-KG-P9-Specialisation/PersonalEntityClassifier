@@ -86,6 +86,45 @@ class MicroMetric(MetricBase):
         if r == 0.:
             return 0.
         return 2 * p * r / float(p + r)
+
+class PrecisionSigmoidMetric(MicroMetric):
+    def __init__(self, pred=None, target=None, no_relation_idx=0):
+        super().__init__(pred, target, no_relation_idx)
+    def evaluate(self, pred, target, seq_len=None):
+        '''
+        :param pred: batch_size
+        :param target: batch_size
+        :param seq_len: not uesed when doing text classification
+        :return:
+        '''
+
+        if not isinstance(pred, torch.Tensor):
+            raise TypeError(f"`pred` in {_get_func_signature(self.evaluate)} must be torch.Tensor,"
+                            f"got {type(pred)}.")
+        if not isinstance(target, torch.Tensor):
+            raise TypeError(f"`target` in {_get_func_signature(self.evaluate)} must be torch.Tensor,"
+                            f"got {type(target)}.")
+
+        if pred.dim() != target.dim():
+            raise RuntimeError(f"In {_get_func_signature(self.evaluate)}, when pred have "
+                               f"size:{pred.size()}, target should have size: {pred.size()} or "
+                               f"{pred.size()[:-1]}, got {target.size()}.")
+
+        preds = pred.detach().cpu().numpy().tolist()
+        targets = target.to('cpu').numpy().tolist()
+        round_prediction = lambda x: 1 if x>= 0.5 else 0
+        preds = [round_prediction(x) for x in preds]
+        for predx, targ in zip(preds, targets):
+            if predx == targ and predx == 0:
+                self.true_negative += 1
+            elif predx == targ and predx == 1:
+                self.true_positive += 1
+            elif (not predx == targ) and predx == 0:
+                self.false_negative += 1
+            elif (not predx == targ) and predx == 1:
+                self.false_positive += 1
+                #self.num_predict += 1
+
 class LossMetric(MetricBase):
     def __init__(self, loss=None):
         super().__init__()

@@ -589,5 +589,5 @@ if __name__ == '__main__':
     os.system('mv xaa data/input2.jsonl')
     os.system('mv xab data/input3.jsonl')
     
-    os.system('rm data/total_dataset2.jsonl data/total_dataset3.jsonl data/total_dataset4.jsonl data/total_dataset5.jsonl data/total_dataset6.jsonl')
+    os.system('rm data/total_dataset2.jsonl data/total_dataset3.jsonl data/total_dataset4.jsonl data/total_dataset5.jsonl data/total_dataset6.jsonl xab2')
     print('Input data completely finished')

@@ -1,18 +1,15 @@
 from cgi import print_arguments
-import os
+#import os
 import sys
 
-import argparse
-import numpy as np
 import torch
 from torch import optim
-import torch.nn as nn
-from transformers import RobertaConfig, RobertaTokenizer
-from torch.utils.data import DataLoader
-import fitlog
-from fastNLP import cache_results
-from fastNLP import FitlogCallback, WarmupCallback, GradientClipCallback
-from fastNLP import RandomSampler, TorchLoaderIter, LossInForward, Trainer, Tester
+#import torch.nn as nn
+from transformers import RobertaConfig
+#import fitlog
+#from fastNLP import cache_results
+#from fastNLP import FitlogCallback, WarmupCallback, GradientClipCallback
+from fastNLP import RandomSampler, TorchLoaderIter, LossInForward, Trainer, Tester,cache_results,FitlogCallback, WarmupCallback, GradientClipCallback
 #from transformers import Trainer, TrainingArguments
 
 from utils import MicroMetric,LossMetric,PrecisionSigmoidMetric

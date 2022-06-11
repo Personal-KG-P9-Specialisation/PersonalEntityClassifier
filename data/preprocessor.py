@@ -1,4 +1,4 @@
-import json
+import json, re
 #docker run -it --name dev_pers -v "$(pwd)"/:/code pers_cls:1 bin/bash
 def remove_duplicate_from_lst_dict(l):
     seen = set()
@@ -31,6 +31,7 @@ class Preprocessor:
         for conv in self.convs:
             for utt in conv['utterances']:
                 utt['spans'] = remove_duplicate_from_lst_dict(utt['spans'])
+
         
     def add_conceptnet(self):
         f = open(self.CSKG_file, 'r')
@@ -158,6 +159,7 @@ class Preprocessor:
                     conv1['utterances'].append(utt)
             convs.append(conv1)
             convs.append(conv2)
+
         self.convs = convs
     def export_convs(self,file):
         with open(file,'w') as f:
@@ -170,14 +172,44 @@ def map_span_to_relations(file_path, output_file_path):
     with open(file_path, "r") as f:
         for line in f.readlines():
             data.append(json.loads(line))
+
     for conv in data:
+        
         for utt in conv['utterances']:
+            new_rels = []
             for rel in utt['relations']:
+                
                 for span in utt['spans']:
                     if rel['head_span']['start'] == span['start'] and rel['head_span']['end'] == span['end']:
                         rel['head_span'] = span
                     if rel['child_span']['start'] == span['start'] and rel['child_span']['end'] == span['end']:
                         rel['child_span'] = span
+                if not ('agent' in rel['head_span']['text'].lower()):
+                    new_rels.append(rel)
+            utt['relations'] = new_rels
+          
+    for conv in data:
+            if conv['Agent'] == 1:
+                rm_span = 9
+            elif conv['Agent'] == 2:
+                rm_span = 10
+            for utt in conv['utterances']:
+                utt['text'] = utt['text'][rm_span:]
+                for rel in utt['relations']:
+                    for em in [rel['head_span'], rel['child_span']]:
+                        em['start'] = em['start'] - rm_span
+                        em['end'] = em['end']-rm_span
+                        if not (em['text'] == utt['text'][em['start']:em['end']]) and em['text'] =='i':
+                            em['start'] = utt['text'].find('i')
+                            em['end'] = em['start']+1
+                        if not (em['text'] == utt['text'][em['start']:em['end']]) and not (em['text'] =='i'):
+                            em['start'] = utt['text'].find(em['text'])
+                            em['end'] = em['start'] +len(em['text'])
+                        assert em['text'] == utt['text'][em['start']:em['end']]
+                """for span in utt['spans']:
+                    span['start'] = span['start'] - rm_span
+                    span['end'] = span['end'] - rm_span"""
+    
     with open(output_file_path, "w") as f:
         for conv in data:
             f.write(json.dumps(conv)+'\n')

@@ -38,7 +38,7 @@ class PKGDataSet(Dataset):
         token_types = []
         em_indices,personal_ids = utt['input_pec']['entity_mention_idx']
         ems = list(set(personal_ids))
-        #ems = self.filter_ems(ems)
+        ems = self.filter_ems(ems, utt)
         for em in ems:
             temp = utt['input_pec']['token_type_ids'].copy()
             for pers_id,em_index in zip(personal_ids,em_indices):
@@ -70,6 +70,8 @@ class PKGDataSet(Dataset):
                 'n_tail_mentions':utt['input_pec']['n_object_nodes'],
                 'target':y,
             })
+        def filter_ems(self,ems, utt):
+            return ems
     
     def collate_fn(self, batch):
         
@@ -101,17 +103,6 @@ class PKGDataSet(Dataset):
             word_nodes = sample['input_ids'][n_pkg_ents+2+n_pkg_cskg+n_pkg_rels:n_pkg_ents+2+n_pkg_cskg+n_pkg_rels+n_word_nodes]
             rel_nodes = sample['input_ids'][n_pkg_ents+2+n_pkg_cskg+n_pkg_rels+n_word_nodes:n_pkg_ents+2+n_pkg_cskg+n_pkg_rels+n_word_nodes+n_relation_nodes]
             tail_nodes = sample['input_ids'][n_pkg_ents+2+n_pkg_cskg+n_pkg_rels+n_word_nodes+n_relation_nodes:]
-            
-            #Test code - NEEDS TO BE DELETED
-            """def f(x):
-                if str(x).isnumeric():
-                    return int(x)
-                return 0
-            pkg_ents = [f(x) for x in pkg_ents]
-            pkg_rels = [f(x) for x in pkg_rels]
-            rel_nodes = [f(x) for x in rel_nodes]
-            word_nodes = [f(x) for x in word_nodes]
-            tail_nodes = [f(x) for x in tail_nodes]"""
             
             batch_start_tokens.append(start_tokens)
             batch_pkg_ents.append(pkg_ents)
@@ -247,6 +238,15 @@ class PKGDatasetEvenDist(PKGDataSet):
     def __init__(self, path, max_pkg_ents=None, max_pkg_rels=None, max_pkg_cskg=None, max_words=None, max_rels=None, max_tails=None):
         super().__init__(path, max_pkg_ents, max_pkg_rels, max_pkg_cskg, max_words, max_rels, max_tails)
         self._evenizeData()
+    
+    def filter_ems(self,ems, utt):
+        pronouns = set()
+        for rel in utt['relations']:
+            for em in [rel['head_span'], rel['child_span']]:
+                if 'isPronoun' in em.keys():
+                    pronouns.add(int(em['personal_id']))
+        
+        return [x for x in ems if x not in pronouns]
     
     def _evenizeData(self):
         elementCounter = {}

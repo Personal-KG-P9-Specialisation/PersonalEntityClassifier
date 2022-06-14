@@ -1,6 +1,6 @@
 from cgi import print_arguments
 #import os
-import sys
+import sys,os
 
 import torch
 from torch import optim
@@ -15,10 +15,16 @@ from fastNLP import RandomSampler, TorchLoaderIter, LossInForward, Trainer, Test
 from utils import MicroMetric,LossMetric,PrecisionSigmoidMetric
 from model import URG, URG_Sig
 from dataset import PKGDataSet,PKGDatasetEvenDist,PKGDatasetSig
-
+import numpy as np
+np.random.seed(101)
 #For Sckit learn, which it handles correctly.
 import warnings
 warnings.filterwarnings('ignore')
+
+OUTPUT_DIR = os.getenv('output')
+if not os.path.exists(OUTPUT_DIR):
+    os.system(f'mkdir {OUTPUT_DIR}')
+
 
 BATCH_SIZE = 16
 EPOCHS=200
@@ -38,6 +44,7 @@ N_PERS_RELS = 42#,36
 
 NUM_CSKG = 837
 NUM_REL = 20
+
 devices = list(range(torch.cuda.device_count()))
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 config = RobertaConfig.from_pretrained('roberta-base', type_vocab_size=6) #possibly 7
@@ -93,13 +100,19 @@ dev_data_iter = TorchLoaderIter(dataset=dev_set,
 test_iter = TorchLoaderIter(dataset=test_set,
                                     batch_size=bsz,
                                     collate_fn=dev_set.collate_fn, sampler=RandomSampler())
-#args = TrainingArguments('test',do_train=True)
-#trainer = Trainer(model=model,train_dataset=train_set,eval_dataset=train_set,args=args)
+
+#test code
+"""for i,y in train_data_iter.dataiter:
+    p = model(i['input_ids'],i['attention_mask'],i['token_type_ids'],i['position_ids'],None, None,i['n_pkg_ents'],i['n_pkg_cskg'],i['n_pkg_rels'],i['n_word_nodes'],i['n_relation_nodes'],i['n_tail_mentions'],i['target'])
+    print(p)
+    exit()"""
+
 if len(sys.argv) >=2 and str(sys.argv[1]) == 'gpu':
     trainer =Trainer(train_data=train_data_iter,
                       dev_data=dev_data_iter,
                       model=model,
                       optimizer=optimizer,
+                      save_path=OUTPUT_DIR,
                       loss=LossInForward(),
                       batch_size=bsz,
                       update_every=GRAD_ACCUMULATION,
@@ -112,6 +125,7 @@ if len(sys.argv) >=2 and str(sys.argv[1]) == 'gpu':
 else:
     trainer = Trainer(train_data=train_data_iter,
                       dev_data=dev_data_iter,
+                      save_path=OUTPUT_DIR,
                       model=model,
                       optimizer=optimizer,
                       loss=LossInForward(),
@@ -125,8 +139,18 @@ else:
                       use_tqdm=True)
 
 trainer.train()
+#assumes only one model
+model = torch.load(f'{OUTPUT_DIR}/'+os.listdir(f'{OUTPUT_DIR}')[0])
 if len(sys.argv) >=2 and str(sys.argv[1]) == 'gpu': 
     tester = Tester(data=test_iter, model=model, metrics=metrics, device=devices)
 else:
     tester = Tester(data=test_iter, model=model, metrics=metrics)
+tester.test()
+
+print('train_data results on best performing model')
+
+if len(sys.argv) >=2 and str(sys.argv[1]) == 'gpu': 
+    tester = Tester(data=test_iter, model=model, metrics=metrics, device=devices)
+else:
+    tester = Tester(data=train_data_iter, model=model, metrics=metrics)
 tester.test()

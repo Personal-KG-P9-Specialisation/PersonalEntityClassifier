@@ -272,9 +272,15 @@ class ClsHead(nn.Module):
         #self.layer_norm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         #self.decoder = nn.Linear(config.hidden_size, num_labels, bias=False)
 
-        self.dense = nn.Linear(101376, 200)
-        self.layer_norm = BertLayerNorm(200, eps=config.layer_norm_eps)
-        self.decoder = nn.Linear(200, num_labels, bias=False)
+        #standard containers
+        #self.dense = nn.Linear(101376, 200)
+        #self.layer_norm = BertLayerNorm(200, eps=config.layer_norm_eps)
+        #self.decoder = nn.Linear(200, num_labels, bias=False)
+        #complex container
+        self.dense = nn.Linear(101376, 400)
+        self.layer_norm = BertLayerNorm(400, eps=config.layer_norm_eps)
+        self.decoder = nn.Linear(400, num_labels, bias=False)
+
         self.bias = nn.Parameter(torch.zeros(num_labels), requires_grad=True)
         self.dropout = nn.Dropout(p=dropout)
         self.decoder.bias = self.bias

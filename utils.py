@@ -451,7 +451,6 @@ def create_input(tokenizer, utt, max_utt_len):
                                       'soft_position': soft_position, 'adj': adj.tolist(),
                                       'token_type_ids': token_types, 'entity_mention_idx':(em_indices,personal_ids)}
 
-#TODO:needs test
 #removes agentX and rels with agent in span
 # ADD pronoun field
 def personal_id_fixer(input, output):
@@ -574,6 +573,7 @@ def experimental_setup(data_file, output_file):
             f_o.write(json.dumps(conv)+'\n')
 
     print('Experimental Setup Done!!!')
+
 if __name__ == '__main__':
     #exec(open('data/preprocessor.py').read())
     os.system('cd data && python -m preprocessor && cd ..')

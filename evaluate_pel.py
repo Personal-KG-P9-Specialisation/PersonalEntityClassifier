@@ -1,3 +1,4 @@
+from codecs import lookup_error
 from utils import create_input
 import json
 from transformers import RobertaTokenizer
@@ -42,18 +43,27 @@ def convert_utt_to_dict(utt, em):
                 'target':gt,
     }
 
-def evaluate_convs(data_path,model_path):
+def prepare_data(data_paths,model_path, output_path):
     convs = []
+    rights = 0
+    assertion_count = 0
+    all = 0
     tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = torch.load(model_path)
     model = model.to(device)
     u = UtterancePadder(24,42,16,24,5,19)
-    with open(data_path,'r') as f:
-        for line in f.readlines():
-            convs.append(json.loads(line))
+    for i in data_paths:
+        with open(i,'r') as f:
+            for line in f.readlines():
+                convs.append(json.loads(line))
+    f = open(output_path,'w')
     for conv in convs:
+        conv['utterances'] = sorted(conv['utterances'], key =lambda x: x['turn'])
+        textsofar = ''
         for utt in conv['utterances']:
+            utt['dialogue_history'] = textsofar
+            textsofar += utt['text']
             #print(utt)
             #input = create_input(tokenizer, utt, 10000)
             
@@ -65,15 +75,44 @@ def evaluate_convs(data_path,model_path):
             print(tokenizer.decode( em_nodes))
             print(input.keys())"""
             #1 is personal id for first utterance.
-            input2= convert_utt_to_dict(utt,1)
-            #print(input2.keys())
+            personal_ids = []
+            for rel in utt['relations']:
+                for em in [rel['head_span'],rel['child_span']]:
+                    if not em['text'].lower() == ['i', 'my','he','his','her','they','their','our','we', 'she','hers']:
+                        personal_ids.append(em['personal_id'])
+            lookup_pers = {}
+            for x in personal_ids:
+                input2= convert_utt_to_dict(utt,x)
             
-            i = u.pad_utt([input2])
+                #print(input2.keys())
             
-            p = model(i['input_ids'],i['attention_mask'],i['token_type_ids'],i['position_ids'],None, None,i['n_pkg_ents'],i['n_pkg_cskg'],i['n_pkg_rels'],i['n_word_nodes'],i['n_relation_nodes'],i['n_tail_mentions'],i['target'])
-            print(p)
-            print(i)
-            print(f"Prediction is {p['pred'][0]}, while ground truth is {i['target'][0]}")
-            exit()
-            print()
-evaluate_convs('data/input3.jsonl','models3_w_seed/best_URG_Sig_f_score_2022-06-12-10-50-09-248443')
+                try:
+                    i = u.pad_utt([input2])
+                    p = model(i['input_ids'],i['attention_mask'],i['token_type_ids'],i['position_ids'],None, None,i['n_pkg_ents'],i['n_pkg_cskg'],i['n_pkg_rels'],i['n_word_nodes'],i['n_relation_nodes'],i['n_tail_mentions'],i['target'])
+                
+                #print(p)
+                #print(i)
+                #print(f"Prediction is {p['pred'][0]}, while ground truth is {i['target'][0]}")
+                    lookup_pers[x] = (p['pred'].tolist()[0],i['target'].tolist()[0])
+                    if p['pred'][0] > 0.5:
+                        if int(i['target'][0]) == 1:
+                            rights += 1
+                    else:
+                        if int(i['target'][0]) == 0:
+                            rights += 1
+                    all += 1
+                except AssertionError:
+                    assertion_count += 1
+            for rel in utt['relations']:
+                for em in [rel['head_span'],rel['child_span']]:
+                    if not em['text'].lower() == ['i', 'my','he','his','her','they','their','our','we', 'she','hers']:
+                        if em['personal_id'] in lookup_pers.keys():
+                            em['pec_prediction']= lookup_pers[em['personal_id']]
+        f.write(json.dumps(conv)+'\n')
+    f.close()
+    print(f"Assertion error for {assertion_count}\n")
+    print(f"Accuracy on this data is {rights/all}%") 
+
+if __name__ == "__main__":
+    prepare_data(['data/input2.jsonl','data/input3.jsonl'],'final_model/best_URG_Sig_f_score_2022-06-15-05-43-50-890178', 'pel_test_data.jsonl')
+    #prepare_data(['data/input1.jsonl'],'final_model/best_URG_Sig_f_score_2022-06-15-05-43-50-890178', 'pel_train_data.jsonl')

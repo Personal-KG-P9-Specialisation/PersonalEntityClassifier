@@ -1,7 +1,7 @@
 from cgi import print_arguments
 #import os
 import sys,os
-
+import time
 import torch
 from torch import optim
 #import torch.nn as nn
@@ -137,8 +137,9 @@ else:
                       #callbacks=[fitlog_callback, gradient_clip_callback, warmup_callback],
                       #device=devices,
                       use_tqdm=True)
-
+start = time.time()
 trainer.train()
+print(f"training finished in {time.time()-start}s")
 #assumes only one model
 model = torch.load(f'{OUTPUT_DIR}/'+os.listdir(f'{OUTPUT_DIR}')[0])
 if len(sys.argv) >=2 and str(sys.argv[1]) == 'gpu': 

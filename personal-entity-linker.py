@@ -21,8 +21,8 @@ def neural_coref(text):
 
 def entityLinker(pkg, lookup, dialogue, utterance, mention, classification):   
     if classification == "pronoun":
-        personalPronouns = ["my", "i"]
-        alternativePronouns = ["he", "she", "you", "it", "its", "we", "they", "them", "their", "theirs", "his", "hers", "her", "him", "your"]
+        personalPronouns = ["my", "i", "our", "we", "us"]
+        alternativePronouns = ["he", "she", "you", "it", "its", "they", "them", "their", "theirs", "his", "hers", "her", "him", "your"]
 
         if mention.lower() in personalPronouns:
             if mention.lower() in lookup.keys():

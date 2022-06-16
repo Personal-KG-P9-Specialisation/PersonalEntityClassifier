@@ -11,8 +11,7 @@ class PKGDataSet(Dataset):
         self.__read_file__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.max_pkg_ents, self.max_pkg_rels, self.max_pkg_cskg,self.max_words,self.max_rels,self.max_tails = max_pkg_ents,max_pkg_rels,max_pkg_cskg,max_words,max_rels,max_tails
-        
-    #TODO maybe skip pronouns as well
+    
     def __read_file__(self):
         with open(self.path, 'r') as f:
             for line in f.readlines():
@@ -175,14 +174,8 @@ class PKGDataSet(Dataset):
                 batch_x['token_type_ids'][i][n_pkg_ents+2+n_pkg_cskg+n_pkg_rels:n_pkg_ents+2+n_pkg_cskg+n_pkg_rels+n_word_nodes]+ [0]*word_pad +\
                 batch_x['token_type_ids'][i][n_pkg_ents+2+n_pkg_cskg+n_pkg_rels+n_word_nodes:n_pkg_ents+2+n_pkg_cskg+n_pkg_rels+n_word_nodes+n_relation_nodes] + [0]*rels_pad + \
                 batch_x['token_type_ids'][i][n_pkg_ents+2+n_pkg_cskg+n_pkg_rels+n_word_nodes+n_relation_nodes:] + [0] * tail_pad
-            """batch_x['token_type_ids'][i] = batch_x['token_type_ids'][i][:n_pkg_ents] +[0]*pkg_ent_pad + \
-                batch_x['token_type_ids'][i][n_pkg_ents:n_pkg_ents+n_pkg_rels] + [0]*pkg_rels_pad + \
-                batch_x['token_type_ids'][i][n_pkg_ents+n_pkg_rels:n_pkg_ents+n_pkg_rels+n_word_nodes]+ [0]*word_pad +\
-                batch_x['token_type_ids'][i][n_pkg_ents+n_pkg_rels+n_word_nodes:n_pkg_ents+n_pkg_rels+n_word_nodes+n_relation_nodes] + [0]*rels_pad + \
-                batch_x['token_type_ids'][i][n_pkg_ents+n_pkg_rels+n_word_nodes+n_relation_nodes:] + [0] * tail_pad"""
             
             adj = torch.tensor(batch_x['attention_mask'][i], dtype=torch.int)
-            #print(torch.reshape(adj[0,:],(1,-1)).shape, adj[1:n_pkg_ents, :].shape)
             adj = torch.cat((torch.reshape(adj[0,:],(1,-1)),adj[1:n_pkg_ents, :],
                              torch.ones(pkg_ent_pad, adj.shape[1], dtype=torch.int),
                              adj[n_pkg_ents+1:n_pkg_ents+1+n_pkg_cskg, :],

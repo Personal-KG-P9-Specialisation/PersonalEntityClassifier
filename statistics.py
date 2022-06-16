@@ -38,6 +38,18 @@ def num_cskg_unique(data):
                             unique_list.append(i['conceptnet'])
     return len(unique_list)
 
+def num_personal_ents(data):
+    count = 0
+    for conv in data:
+        personal_ids = []
+        for utt in conv['utterances']:
+            for rel in utt['relations']:
+                for i in [rel['head_span'], rel['child_span']]:
+                    if 'personal_id' in i.keys():    
+                        if i['personal_id'] not in personal_ids:
+                            personal_ids.append(i['personal_id'])
+        count += len(personal_ids)
+    return count
 def pers_chain(data):
     chains_freq = {}
     for conv in data:
@@ -59,14 +71,19 @@ def pers_chain(data):
     return chains_freq
 
 def histogram(dic):
-    dic.pop(1)
-    dic.pop(2)
+    #dic.pop(1)
+    #dic.pop(2)
     plt.bar(dic.keys(), dic.values(), color=(0.2, 0.4, 0.6, 0.6))
-    plt.xlabel("# of elements in personal entity chains")
+    plt.xlabel("Number of reoccuring personal entities")
     plt.ylabel("Frequency")
     plt.savefig('chains-freq1.png')
 
 if __name__ == '__main__':
     with open('data/pec_convs.jsonl') as f:
         data = [json.loads(line) for line in f]
+        #print(f"Number of conversations: {num_conv(data)}\n")
+        #print(f"Number of Utterances: {num_utterance(data)}\n")
+        #print(f"Number of triples: {num_rel(data)}\n")
+        #print(f"Number of unique CSKG: {num_cskg_unique(data)}\n")
+        #print(f"Number of unique personal entities: {num_personal_ents(data)}\n")
         histogram(pers_chain(data))

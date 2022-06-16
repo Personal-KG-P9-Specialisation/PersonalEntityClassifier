@@ -1,19 +1,14 @@
 from cgi import print_arguments
-#import os
 import sys,os
 import time
 import torch
 from torch import optim
-#import torch.nn as nn
 from transformers import RobertaConfig
-#import fitlog
-#from fastNLP import cache_results
-#from fastNLP import FitlogCallback, WarmupCallback, GradientClipCallback
 from fastNLP import RandomSampler, TorchLoaderIter, LossInForward, Trainer, Tester,cache_results,FitlogCallback, WarmupCallback, GradientClipCallback
 #from transformers import Trainer, TrainingArguments
 
 from utils import MicroMetric,LossMetric,PrecisionSigmoidMetric
-from model import URG, URG_Sig
+from model import PEC, PEC_Sig
 from dataset import PKGDataSet,PKGDatasetEvenDist,PKGDatasetSig
 import numpy as np
 np.random.seed(101)
@@ -48,7 +43,7 @@ NUM_REL = 20
 devices = list(range(torch.cuda.device_count()))
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 config = RobertaConfig.from_pretrained('roberta-base', type_vocab_size=6) #possibly 7
-model = URG_Sig(config, NUM_CSKG, NUM_REL)
+model = PEC_Sig(config, NUM_CSKG, NUM_REL)
 model = model.to(device)
 # fine-tune
 no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight', 'embedding']

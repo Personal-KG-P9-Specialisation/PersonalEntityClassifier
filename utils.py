@@ -1,10 +1,9 @@
 import torch
 from fastNLP.core.metrics import MetricBase
 from fastNLP.core.utils import _get_func_signature
-from sklearn.metrics import f1_score, precision_recall_fscore_support,precision_score, recall_score, f1_score
+from sklearn.metrics import f1_score, precision_score, recall_score, f1_score
 import itertools
-import matplotlib.pyplot as plt
-import pickle, os,sys
+import pickle, os
 
 def round_pred(lst):
     if lst[0] > lst[1]:
@@ -16,9 +15,6 @@ class MicroMetric(MetricBase):
     def __init__(self, pred=None, target=None, no_relation_idx=0):
         super().__init__()
         self._init_param_map(pred=pred, target=target, seq_len=None)
-        #self.no_relation = no_relation_idx
-        #self.num_predict = 0
-        #self.num_golden = 0
         self.true_positive = 0
         self.true_negative = 0
         self.false_positive = 0
@@ -326,16 +322,6 @@ def create_input(tokenizer, utt, max_utt_len):
         anchor_indices.append((x['head_span']['start'],x['head_span']['end']))
         temp_personal_ids.append(x['head_span']['personal_id'])
         rel_map[(utt['text'][x['head_span']['start']:x['head_span']['end']],(x['head_span']['start'],x['head_span']['end']))] = x
-        
-        """if utt['text'][x['head_span']['start']:x['head_span']['end']] in rel_map.keys():
-            rel_map[utt['text'][x['head_span']['start']:x['head_span']['end']]].put(x)
-        else:
-            rel_map[utt['text'][x['head_span']['start']:x['head_span']['end']]] = queue.Queue()
-            rel_map[utt['text'][x['head_span']['start']:x['head_span']['end']]].put(x)"""
-        #anchor_words.append(utt['text'][x['child_span']['start']:x['child_span']['end']])
-        #print(x)
-    #words = tokenizer.encode( utt['text'])
-    #words = words[:max_utt_len]
     
     text = utt['text']
     text = text.replace("."," ").replace("?"," ").replace("!"," ").replace(","," ")
@@ -410,11 +396,6 @@ def create_input(tokenizer, utt, max_utt_len):
             idx += 1
             G.add_node(idx)
             tail_indices.append(idx)
-            """if prev is None:
-                prev = idx
-            else:
-                G.add_edge(prev,idx)
-                prev = idx"""
             node2label[idx] = i
             soft_position.append(posi)
             posi += 1
@@ -575,7 +556,7 @@ def experimental_setup(data_file, output_file):
     print('Experimental Setup Done!!!')
 
 if __name__ == '__main__':
-    #exec(open('data/preprocessor.py').read())
+    exec(open('data/preprocessor.py').read())
     os.system('cd data && python -m preprocessor && cd ..')
     personal_id_fixer("data/total_dataset2.jsonl","data/total_dataset3.jsonl")
     CSKG_REL_mapper("data/total_dataset3.jsonl","data/total_dataset4.jsonl", "data/cskg_dict.pickle","data/rel_dict.pickle")

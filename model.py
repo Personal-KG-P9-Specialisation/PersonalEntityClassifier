@@ -7,7 +7,7 @@ from transformers import RobertaConfig, RobertaForMaskedLM
 from transformers.modeling_bert import BertLayerNorm, gelu
 
 
-class PEL(RobertaForMaskedLM):
+class PEC(RobertaForMaskedLM):
     config_class = RobertaConfig
     base_model_prefix = "roberta"
 
@@ -101,7 +101,7 @@ class PEL(RobertaForMaskedLM):
         return {'loss': loss, 'pred': predictions}
 
 
-class PEL_Sig(RobertaForMaskedLM):
+class PEC_Sig(RobertaForMaskedLM):
     config_class = RobertaConfig
     base_model_prefix = "roberta"
 
